@@ -27,6 +27,7 @@ public class Produto {
     @Column(nullable = false)
     private BigDecimal preco;
 
+    @Column(name = "categoria_id")
     private CategoriaProduto categoria;
 
     private String descricao;
