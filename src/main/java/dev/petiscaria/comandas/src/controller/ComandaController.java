@@ -1,10 +1,8 @@
 package dev.petiscaria.comandas.src.controller;
 
-import dev.petiscaria.comandas.src.enuns.StatusComanda;
 import dev.petiscaria.comandas.src.models.comanda.Comanda;
 import dev.petiscaria.comandas.src.models.comanda.ItemPedido;
 import dev.petiscaria.comandas.src.service.comanda.ComandaService;
-import dev.petiscaria.comandas.src.repository.comanda.ComandaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,14 +14,12 @@ import java.util.List;
 public class ComandaController {
 
     private final ComandaService service;
-    private final ComandaRepository repository;
 
     @PostMapping("/abrir/{mesaId}")
     public Comanda abrir(@PathVariable Integer mesaId) {
         return service.abrirComanda(mesaId);
     }
 
-    // Corrigido: Apenas UM @RequestBody. O produtoId vem via URL (Query Param)
     @PostMapping("/{comandaId}/itens")
     public Comanda adicionarItem(
             @PathVariable Long comandaId,
@@ -34,15 +30,12 @@ public class ComandaController {
 
     @GetMapping("/ativas")
     public List<Comanda> listarAbertas() {
-        return repository.findAll().stream()
-                .filter(c -> c.getStatus() == StatusComanda.ABERTA)
-                .toList();
+        return service.listarAbertas();
     }
 
     @GetMapping("/{id}")
     public Comanda buscarDetalhes(@PathVariable Long id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Comanda não encontrada"));
+        return service.buscarPorId(id);
     }
 
     @PatchMapping("/{id}/fechar")
@@ -53,5 +46,20 @@ public class ComandaController {
     @PutMapping("/{id}/enviar")
     public void enviarParaCozinha(@PathVariable Long id) {
         service.enviarParaCozinha(id);
+    }
+
+    @PatchMapping("/{comandaId}/itens/{itemId}")
+    public Comanda editarItem(
+            @PathVariable Long comandaId,
+            @PathVariable Long itemId,
+            @RequestParam Integer quantidade) {
+        return service.editarItem(comandaId, itemId, quantidade);
+    }
+
+    @DeleteMapping("/{comandaId}/itens/{itemId}")
+    public Comanda removerItem(
+            @PathVariable Long comandaId,
+            @PathVariable Long itemId) {
+        return service.removerItem(comandaId, itemId);
     }
 }

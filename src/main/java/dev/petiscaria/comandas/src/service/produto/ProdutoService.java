@@ -1,5 +1,6 @@
 package dev.petiscaria.comandas.src.service.produto;
 
+import dev.petiscaria.comandas.src.exception.EntidadeNaoEncontradaException;
 import dev.petiscaria.comandas.src.models.produto.Produto;
 import dev.petiscaria.comandas.src.repository.produto.ProdutoRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +29,7 @@ public class ProdutoService {
     @Transactional
     public Produto atualizar(Long id, Produto novosDados) {
         Produto produto = produtoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Produto não encontrado"));
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Produto não encontrado"));
 
         produto.setNome(novosDados.getNome());
         produto.setPreco(novosDados.getPreco());
@@ -54,7 +55,7 @@ public class ProdutoService {
     @Transactional
     public Produto alternarDisponibilidade(Long id) {
         Produto produto = produtoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Produto não encontrado"));
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Produto não encontrado"));
 
         // Se estava true vira false, se estava false vira true (Acabou no estoque / Voltou)
         produto.setDisponivel(!produto.getDisponivel());

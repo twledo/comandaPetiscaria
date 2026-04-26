@@ -2,6 +2,8 @@ package dev.petiscaria.comandas.src.service.comanda;
 
 import dev.petiscaria.comandas.src.enuns.StatusComanda;
 import dev.petiscaria.comandas.src.enuns.StatusPreparo;
+import dev.petiscaria.comandas.src.exception.EntidadeNaoEncontradaException;
+import dev.petiscaria.comandas.src.exception.RegraDeNegocioException;
 import dev.petiscaria.comandas.src.models.comanda.Comanda;
 import dev.petiscaria.comandas.src.models.comanda.ItemPedido;
 import dev.petiscaria.comandas.src.models.produto.Produto;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -21,11 +24,20 @@ public class ComandaService {
     private final ItemPedidoRepository itemPedidoRepository;
     private final ProdutoRepository produtoRepository;
 
+    public List<Comanda> listarAbertas() {
+        return comandaRepository.findByStatus(StatusComanda.ABERTA);
+    }
+
+    public Comanda buscarPorId(Long id) {
+        return comandaRepository.findById(id)
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Comanda não encontrada"));
+    }
+
     @Transactional
     public Comanda abrirComanda(Integer mesaId) {
         // Regra: Uma mesa só pode ter uma comanda ABERTA
         comandaRepository.findByMesaIdAndStatus(mesaId, StatusComanda.ABERTA)
-                .ifPresent(c -> { throw new RuntimeException("Mesa já ocupada!"); });
+                .ifPresent(c -> { throw new RegraDeNegocioException("Mesa já ocupada!"); });
 
         Comanda nova = new Comanda();
         nova.setMesaId(mesaId);
@@ -34,16 +46,17 @@ public class ComandaService {
 
     @Transactional
     public Comanda adicionarItem(Long comandaId, Long produtoId, ItemPedido dadosItem) {
-        Comanda comanda = comandaRepository.findById(comandaId).get();
+        Comanda comanda = comandaRepository.findById(comandaId)
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Comanda não encontrada"));
         Produto produto = produtoRepository.findById(produtoId)
-                .orElseThrow(() -> new RuntimeException("Produto não existe"));
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Produto não encontrado"));
 
         if (!produto.getDisponivel()) {
-            throw new RuntimeException("Este produto acabou no estoque!");
+            throw new RegraDeNegocioException("Este produto acabou no estoque!");
         }
 
         if (dadosItem.isMeiaPorcao() && !produto.isPermiteMeia()) {
-            throw new RuntimeException("Este produto não pode ser vendido como meia porção.");
+            throw new RegraDeNegocioException("Este produto não pode ser vendido como meia porção.");
         }
 
         // Faz a cópia dos dados do Produto para o Item (Snapshot)
@@ -64,7 +77,8 @@ public class ComandaService {
 
     @Transactional
     public Comanda fecharComanda(Long comandaId) {
-        Comanda comanda = comandaRepository.findById(comandaId).get();
+        Comanda comanda = comandaRepository.findById(comandaId)
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Comanda não encontrada"));
         comanda.setStatus(StatusComanda.FECHADA);
         return comandaRepository.save(comanda);
     }
@@ -73,16 +87,16 @@ public class ComandaService {
     @Transactional
     public Comanda editarItem(Long comandaId, Long itemId, Integer novaQuantidade) {
         Comanda comanda = comandaRepository.findById(comandaId)
-                .orElseThrow(() -> new RuntimeException("Comanda não encontrada"));
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Comanda não encontrada"));
 
         ItemPedido item = comanda.getItens().stream()
                 .filter(i -> i.getId().equals(itemId))
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("Item não encontrado na comanda"));
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Item não encontrado na comanda"));
 
-        // Subtrai o valor antigo e soma o novo no total da comanda
-        BigDecimal valorAntigo = item.getPrecoUnitario().multiply(BigDecimal.valueOf(item.getQuantidade()));
-        BigDecimal valorNovo = item.getPrecoUnitario().multiply(BigDecimal.valueOf(novaQuantidade));
+        // Usa getPrecoEfetivo() para respeitar o desconto de meia porção
+        BigDecimal valorAntigo = item.getPrecoEfetivo().multiply(BigDecimal.valueOf(item.getQuantidade()));
+        BigDecimal valorNovo = item.getPrecoEfetivo().multiply(BigDecimal.valueOf(novaQuantidade));
 
         comanda.setTotal(comanda.getTotal().subtract(valorAntigo).add(valorNovo));
         item.setQuantidade(novaQuantidade);
@@ -93,10 +107,13 @@ public class ComandaService {
     // --- REGRA: REMOVER ITEM ---
     @Transactional
     public Comanda removerItem(Long comandaId, Long itemId) {
-        Comanda comanda = comandaRepository.findById(comandaId).get();
-        ItemPedido item = itemPedidoRepository.findById(itemId).get();
+        Comanda comanda = comandaRepository.findById(comandaId)
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Comanda não encontrada"));
+        ItemPedido item = itemPedidoRepository.findById(itemId)
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Item não encontrado"));
 
-        BigDecimal valorRemovido = item.getPrecoUnitario().multiply(BigDecimal.valueOf(item.getQuantidade()));
+        // Usa getPrecoEfetivo() para respeitar o desconto de meia porção
+        BigDecimal valorRemovido = item.getPrecoEfetivo().multiply(BigDecimal.valueOf(item.getQuantidade()));
         comanda.setTotal(comanda.getTotal().subtract(valorRemovido));
 
         comanda.getItens().remove(item);
@@ -106,7 +123,8 @@ public class ComandaService {
     // --- REGRA: ENVIAR PARA COZINHA (BOTÃO ENVIAR) ---
     @Transactional
     public void enviarParaCozinha(Long comandaId) {
-        Comanda comanda = comandaRepository.findById(comandaId).get();
+        Comanda comanda = comandaRepository.findById(comandaId)
+                .orElseThrow(() -> new EntidadeNaoEncontradaException("Comanda não encontrada"));
 
         // Todos os itens que estavam PENDENTES agora vão para EM_PREPARO
         comanda.getItens().forEach(item -> {
