@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+
+/* ── Tokens ──────────────────────────────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  --bg:          #0e0e11;
+  --bg-2:        #16161b;
+  --bg-3:        #1e1e26;
+  --surface:     #24242f;
+  --surface-2:   #2c2c3a;
+  --border:      rgba(255,255,255,0.08);
+  --border-2:    rgba(255,255,255,0.14);
+
+  --text:        #f0f0f5;
+  --text-2:      #a0a0b8;
+  --text-3:      #6060788;
+
+  --accent:      #f97316;
+  --accent-dim:  rgba(249,115,22,0.15);
+  --accent-glow: rgba(249,115,22,0.3);
+
+  --green:       #22c55e;
+  --green-dim:   rgba(34,197,94,0.15);
+  --amber:       #f59e0b;
+  --amber-dim:   rgba(245,158,11,0.15);
+  --red:         #ef4444;
+  --red-dim:     rgba(239,68,68,0.15);
+  --blue:        #3b82f6;
+  --blue-dim:    rgba(59,130,246,0.15);
+
+  --shadow:      0 4px 24px rgba(0,0,0,0.4);
+  --shadow-lg:   0 8px 40px rgba(0,0,0,0.6);
+}
+
+:root[data-theme="light"] {
+  --bg:          #f5f4f0;
+  --bg-2:        #eeede8;
+  --bg-3:        #e6e4de;
+  --surface:     #ffffff;
+  --surface-2:   #f9f8f5;
+  --border:      rgba(0,0,0,0.08);
+  --border-2:    rgba(0,0,0,0.14);
+
+  --text:        #1a1a22;
+  --text-2:      #5a5a6e;
+  --text-3:      #9090a8;
+
+  --accent:      #ea6c0a;
+  --accent-dim:  rgba(234,108,10,0.1);
+  --accent-glow: rgba(234,108,10,0.25);
+
+  --green:       #16a34a;
+  --green-dim:   rgba(22,163,74,0.12);
+  --amber:       #d97706;
+  --amber-dim:   rgba(217,119,6,0.12);
+  --red:         #dc2626;
+  --red-dim:     rgba(220,38,38,0.12);
+  --blue:        #2563eb;
+  --blue-dim:    rgba(37,99,235,0.12);
+
+  --shadow:      0 4px 24px rgba(0,0,0,0.08);
+  --shadow-lg:   0 8px 40px rgba(0,0,0,0.14);
+}
+
+/* ── Reset ───────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  transition: background 0.25s, color 0.25s;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { height: 100%; display: flex; flex-direction: column; }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 99px; }
+
+/* ── Typography ──────────────────────────────────────────────────────────────── */
+h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; letter-spacing: -0.02em; }
+
+/* ── Animations ──────────────────────────────────────────────────────────────── */
+@keyframes fadeIn   { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes slideIn  { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+@keyframes scaleIn  { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+@keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.animate-fade  { animation: fadeIn  0.25s ease both; }
+.animate-scale { animation: scaleIn 0.2s  ease both; }
+.animate-slide { animation: slideIn 0.2s  ease both; }
