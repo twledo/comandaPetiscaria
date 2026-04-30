@@ -6,6 +6,7 @@ import dev.petiscaria.comandas.service.comanda.ComandaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,51 +18,50 @@ public class ComandaController {
 
     private final ComandaService comandaService;
 
-    @GetMapping("/ativas")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
-    public ResponseEntity<?> listarComandasAtivas() {
-        try {
-            List<Comanda> comandas = comandaService.listarComandasAtivas();
-
-            if (comandas.isEmpty()) {
-                return ResponseEntity.noContent().build(); // 204
-            }
-
-            return ResponseEntity.ok(comandas); // 200
-        } catch (Exception e) {
-            // Retorna o erro em formato JSON para o Front-end ler
-            return ResponseEntity.status(500).body(e.getMessage());
-        }
+    /**
+     * Extrai o username do Token JWT para auditoria.
+     */
+    private String getUsuarioLogado() {
+        return SecurityContextHolder.getContext().getAuthentication().getName();
     }
 
     @PostMapping("/abrir/{mesaId}")
-    public Comanda abrir(@PathVariable Long mesaId) {
-        return comandaService.abrirComanda(mesaId);
+    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
+    public ResponseEntity<Comanda> iniciarAtendimento(@PathVariable Long mesaId) {
+        return ResponseEntity.ok(comandaService.iniciarAtendimento(mesaId, getUsuarioLogado()));
     }
 
     @PostMapping("/{comandaId}/itens")
-    public Comanda adicionarItem(
+    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
+    public ResponseEntity<Comanda> registrarConsumo(
             @PathVariable Long comandaId,
             @RequestParam Long produtoId,
             @RequestBody ItemPedido item) {
-        return comandaService.adicionarItem(comandaId, produtoId, item);
+        return ResponseEntity.ok(comandaService.registrarConsumo(comandaId, produtoId, item, getUsuarioLogado()));
     }
 
     @DeleteMapping("/{comandaId}/itens/{itemId}")
-    public Comanda removerItem(@PathVariable Long comandaId, @PathVariable Long itemId) {
-        return comandaService.removerItem(comandaId, itemId);
+    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
+    public ResponseEntity<Comanda> estornarItem(@PathVariable Long comandaId, @PathVariable Long itemId) {
+        return ResponseEntity.ok(comandaService.estornarItem(comandaId, itemId, getUsuarioLogado()));
     }
 
     @PatchMapping("/{id}/fechar")
-    public Comanda fechar(@PathVariable Long id) {
-        return comandaService.fecharComanda(id);
+    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
+    public ResponseEntity<Comanda> solicitarFechamento(@PathVariable Long id) {
+        return ResponseEntity.ok(comandaService.solicitarFechamento(id, getUsuarioLogado()));
+    }
+
+    @PatchMapping("/{id}/reabrir")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Comanda> reabrirComanda(@PathVariable Long id) {
+        return ResponseEntity.ok(comandaService.reabrirAtendimento(id, getUsuarioLogado()));
     }
 
     @PostMapping("/{id}/recebimento")
-    public ResponseEntity<Void> confirmarRecebimento(@PathVariable Long id) {
-        // Em um cenário real, o nome do usuário viria de um token JWT (SecurityContextHolder)
-        String usuarioLogado = "Caixa";
-        comandaService.confirmarRecebimento(id, usuarioLogado);
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> finalizarAtendimento(@PathVariable Long id) {
+        comandaService.finalizarAtendimento(id, getUsuarioLogado());
         return ResponseEntity.ok().build();
     }
 }

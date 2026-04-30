@@ -1,7 +1,8 @@
 package dev.petiscaria.comandas.models.comanda;
 
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import dev.petiscaria.comandas.enuns.StatusComanda;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.petiscaria.comandas.enuns.StatusMesa;
+import dev.petiscaria.comandas.models.mesa.Mesa;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -23,19 +24,15 @@ public class Comanda {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private Integer mesaId;
-
-    @Enumerated(EnumType.STRING)
-    @Builder.Default
-    private StatusComanda status = StatusComanda.DISPONIVEL;
+    @ManyToOne
+    @JoinColumn(name = "mesa_id", nullable = false)
+    private Mesa mesa;
 
     @Builder.Default
     private BigDecimal total = BigDecimal.ZERO;
 
-    @OneToMany(mappedBy = "comanda", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "comanda", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    @JsonManagedReference // Adicione isso para permitir que a comanda mostre seus itens
     private List<ItemPedido> itens = new ArrayList<>();
 
     @CreationTimestamp

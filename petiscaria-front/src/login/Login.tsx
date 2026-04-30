@@ -19,11 +19,10 @@ const Login = ({ aoLogar, irParaRegistro }) => {
             });
 
             // Desestruturamos os dados que o novo DTO do Back-end envia
-            const { token, nomeCompleto, cargo } = response.data;
+            const { token } = response.data;
 
             // Salvamos o token e os dados do perfil para a Sidebar usar
             localStorage.setItem('@Petiscaria:Token', token);
-            localStorage.setItem('@Petiscaria:User', JSON.stringify({ username, cargo }));
 
             // Notifica o App.jsx que o login deu certo
             aoLogar(token);
@@ -86,14 +85,6 @@ const Login = ({ aoLogar, irParaRegistro }) => {
                         Entrar <ArrowRight size={18}/>
                     </button>
                 </form>
-
-                {/* Botão de Alternância */}
-                <button
-                    onClick={irParaRegistro}
-                    className="w-full mt-6 text-[10px] text-gray-500 font-black uppercase tracking-widest hover:text-amber-500 transition-colors"
-                >
-                    Novo por aqui? <span className="underline italic">Criar conta de colaborador</span>
-                </button>
             </div>
         </div>
     );

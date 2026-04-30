@@ -5,14 +5,12 @@ import lombok.Getter;
 
 @Getter
 public enum UnidadeMedida {
-    UNIDADE("UN"),
-    GARRAFA("GF"),
-    LATA("LT"),
-    DOSE("DS"),
     GRAMAS("G"),
-    QUILO("KG"),
-    MILILITROS("ML"),
-    PORCAO("PORCAO");
+    UNIDADE("UN"),
+    UM_LITRO ("1L"),
+    DOIS_LITROS("2L"),
+    LATA("LT"),
+    DOSE("DS");
 
     private final String sigla;
 
@@ -20,7 +18,7 @@ public enum UnidadeMedida {
         this.sigla = sigla;
     }
 
-    @JsonValue // O SEGREDO ESTÁ AQUI
+    @JsonValue
     public String getSigla() {
         return sigla;
     }

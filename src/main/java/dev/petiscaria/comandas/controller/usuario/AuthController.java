@@ -6,6 +6,7 @@ import dev.petiscaria.comandas.models.usuario.Usuario;
 import dev.petiscaria.comandas.service.usuario.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -25,9 +26,10 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    @PreAuthorize("hasRole('ADMIN')") // Somente ADMIN pode registrar novos usuários
     @PostMapping("/registrar")
     public ResponseEntity<Usuario> registrar(@RequestBody Usuario usuario) {
-        var novoUsuario = usuarioService.registrar(usuario);
+        Usuario novoUsuario = usuarioService.registrar(usuario);
         return ResponseEntity.ok(novoUsuario);
     }
 }

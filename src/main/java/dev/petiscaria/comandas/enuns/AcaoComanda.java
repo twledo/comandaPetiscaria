@@ -4,5 +4,6 @@ public enum AcaoComanda {
     ABERTA,
     ITEM_ADICIONADO,
     ITEM_REMOVIDO,
-    FECHADA
+    FECHADA,
+    REABERTA
 }

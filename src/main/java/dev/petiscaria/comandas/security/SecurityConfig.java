@@ -51,6 +51,7 @@ public class SecurityConfig {
                     req.requestMatchers("/api/usuarios/registrar").hasRole(TipoUsuario.ADMIN.name());
                     req.requestMatchers("/api/produtos/**").hasRole(TipoUsuario.ADMIN.name());
                     req.requestMatchers("/api/comandas/**").hasAnyRole(TipoUsuario.ADMIN.name(), TipoUsuario.GARCOM.name());
+                    req.requestMatchers("/api/mesas/**").hasAnyRole(TipoUsuario.ADMIN.name(), TipoUsuario.GARCOM.name());
 
                     req.anyRequest().authenticated();
                 })

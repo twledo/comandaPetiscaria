@@ -14,7 +14,7 @@ import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
-public class SecurityFilter extends OncePerRequestFilter { // Mude para OncePerRequestFilter
+public class SecurityFilter extends OncePerRequestFilter {
 
     private final TokenService tokenService;
     private final UsuarioRepository usuarioRepository;
@@ -26,13 +26,14 @@ public class SecurityFilter extends OncePerRequestFilter { // Mude para OncePerR
         var token = recuperarToken(request);
 
         if (token != null) {
-            var username = tokenService.validarToken(token);
+            var decodedJWT = tokenService.validarToken(token);
 
-            if (username != null) {
+            if (decodedJWT != null) {
+                String username = decodedJWT.getSubject();
+
                 var usuario = usuarioRepository.findByUsername(username)
                         .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
-                // Aqui as Authorities (ROLE_ADMIN, ROLE_GARCOM) são injetadas no contexto
                 var authentication = new UsernamePasswordAuthenticationToken(
                         usuario,
                         null,

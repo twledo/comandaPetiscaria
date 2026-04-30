@@ -27,7 +27,8 @@ public class Produto {
     @Column(nullable = false)
     private BigDecimal preco;
 
-    @Column(name = "categoria_id")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "categoria", nullable = false)
     private CategoriaProduto categoria;
 
     private String descricao;
@@ -39,4 +40,6 @@ public class Produto {
 
     @Enumerated(EnumType.STRING)
     private UnidadeMedida unidadeMedida;
+    
+    private Long quantidadePorUnidade;
 }

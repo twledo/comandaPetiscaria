@@ -1,6 +1,5 @@
 package dev.petiscaria.comandas.models.comanda;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import dev.petiscaria.comandas.models.produto.Produto;
 import jakarta.persistence.*;
@@ -22,15 +21,14 @@ public class ItemPedido {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "comanda_id")
     @JsonIgnore
-    @JsonBackReference
     private Comanda comanda;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "produto_id")
     private Produto produto;
 
     private String nomeProduto; // Snapshot: Nome no momento da compra
-    private Integer quantidade;
+    private Long quantidade;
     private BigDecimal precoUnitario; // Snapshot: Preço no momento da compra
     private String observacao;
     private boolean meiaPorcao = false;

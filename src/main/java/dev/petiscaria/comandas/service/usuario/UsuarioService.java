@@ -9,6 +9,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Lógica de geração de USUÁRIO:
+ * - Thiago Walczinski -> THIAGOWAL (3 primeiras do sobrenome)
+ * - Thiago Walczinski Lucinski -> THIAGOWL (iniciais dos sobrenomes)
+ */
 @Service
 @RequiredArgsConstructor
 public class UsuarioService {

@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -25,12 +26,14 @@ public class ComandaRecebimento {
     @JoinColumn(name = "comanda_id", nullable = false)
     private Comanda comanda;
 
+    private BigDecimal valor;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime dataRecebimento;
 
     @Column(nullable = false)
-    private String usuario; // Nome ou ID do usuário que confirmou
+    private String usuario;
 
     private String observacao;
 }

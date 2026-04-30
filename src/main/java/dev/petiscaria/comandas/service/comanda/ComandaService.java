@@ -1,27 +1,26 @@
 package dev.petiscaria.comandas.service.comanda;
 
 import dev.petiscaria.comandas.enuns.AcaoComanda;
-import dev.petiscaria.comandas.enuns.StatusComanda;
+import dev.petiscaria.comandas.enuns.StatusMesa;
 import dev.petiscaria.comandas.models.comanda.Comanda;
-import dev.petiscaria.comandas.models.comanda.ComandaHistorico;
 import dev.petiscaria.comandas.models.comanda.ComandaRecebimento;
 import dev.petiscaria.comandas.models.comanda.ItemPedido;
+import dev.petiscaria.comandas.models.mesa.Mesa;
 import dev.petiscaria.comandas.models.produto.Produto;
-import dev.petiscaria.comandas.repository.comanda.ComandaHistoricoRepository;
 import dev.petiscaria.comandas.repository.comanda.ComandaRecebimentoRepository;
 import dev.petiscaria.comandas.repository.comanda.ComandaRepository;
+import dev.petiscaria.comandas.repository.mesa.MesaRepository;
 import dev.petiscaria.comandas.repository.produto.ProdutoRepository;
+import dev.petiscaria.comandas.service.audit.AuditoriaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.GetMapping;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 @Slf4j
 @Service
@@ -30,156 +29,198 @@ import java.util.Optional;
 public class ComandaService {
 
     private final ComandaRepository comandaRepository;
+    private final MesaRepository mesaRepository;
     private final ProdutoRepository produtoRepository;
-    private final ComandaHistoricoRepository historicoRepository;
     private final ComandaRecebimentoRepository recebimentoRepository;
+    private final AuditoriaService auditoriaService;
 
-    public List<Comanda> listarComandasAtivas() {
-        try {
-            return comandaRepository.findAllByOrderByIdAsc();
-        } catch (Exception e) {
-            log.error("Erro ao buscar comandas no banco: ", e);
-            throw new RuntimeException("Não foi possível carregar as comandas no momento.");
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
+    public Comanda iniciarAtendimento(Long mesaId, String usuario) {
+        Mesa mesa = mesaRepository.findById(mesaId)
+                .orElseThrow(() -> new RuntimeException("Mesa não encontrada."));
+
+        if (mesa.getStatus() == StatusMesa.OCUPADA) {
+            return comandaRepository.findByMesaAndStatusAtivo(mesa)
+                    .orElseThrow(() -> new RuntimeException("Mesa ocupada mas comanda não encontrada."));
         }
+
+        // 1. Atualiza o status físico da Mesa
+        mesa.setStatus(StatusMesa.OCUPADA);
+        mesaRepository.save(mesa);
+
+        // 2. Cria uma nova Comanda (Registro do atendimento)
+        Comanda comanda = Comanda.builder()
+                .mesa(mesa)
+                .total(BigDecimal.ZERO)
+                .build();
+
+        comanda = comandaRepository.saveAndFlush(comanda);
+
+        auditoriaService.registrarAcao(comanda, AcaoComanda.ABERTA, "Atendimento iniciado na mesa " + mesa.getNumero(), usuario);
+        return comanda;
     }
 
     @Transactional
-    public Comanda abrirComanda(Long mesaId) {
-        // 1. Busca a comanda no banco
-        Comanda comanda = comandaRepository.findByMesaId(mesaId)
-                .orElseThrow(() -> new RuntimeException("Mesa " + mesaId + " não encontrada."));
+    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
+    public Comanda registrarConsumo(Long comandaId, Long produtoId, ItemPedido dadosItem, String usuario) {
+        Comanda comanda = buscarPorIdOuFalhar(comandaId);
+        garantirMesaOcupada(comanda.getMesa());
 
-        // 2. Se a mesa já estiver OCUPADA, não fazemos nada (evita reabrir mesa com gente)
-        if (comanda.getStatus() == StatusComanda.OCUPADA) {
-            return comanda;
-        }
+        Produto produto = produtoRepository.findById(produtoId)
+                .orElseThrow(() -> new RuntimeException("Produto não encontrado."));
 
-        // 3. AGORA A MÁGICA: Limpa a rodada anterior e muda para OCUPADA
-        comanda.setStatus(StatusComanda.OCUPADA); // <--- AQUI: Muda de Verde para Vermelho
-        comanda.setTotal(BigDecimal.ZERO);
-
-        // Importante: certifique-se de que o orphanRemoval=true está no @OneToMany para isso funcionar
-        comanda.getItens().clear();
-
-        registrarHistorico(comanda, AcaoComanda.ABERTA, "Comanda iniciada. Mesa " + mesaId + " agora está OCUPADA.");
-
-        return comandaRepository.save(comanda);
-    }
-
-    @Transactional
-    public Comanda adicionarItem(Long comandaId, Long produtoId, ItemPedido dadosItem) {
-        Comanda comanda = findComandaByIdOrThrow(comandaId);
-        Produto produto = produtoRepository.findById(produtoId).orElseThrow();
-
-        // Tenta encontrar se este produto já está na comanda com as mesmas condições
-        Optional<ItemPedido> itemExistente = comanda.getItens().stream()
+        comanda.getItens().stream()
                 .filter(item -> item.getProduto().getId().equals(produtoId) &&
                         item.isMeiaPorcao() == dadosItem.isMeiaPorcao() &&
                         Objects.equals(item.getObservacao(), dadosItem.getObservacao()))
-                .findFirst();
+                .findFirst()
+                .ifPresentOrElse(
+                        item -> item.setQuantidade(item.getQuantidade() + dadosItem.getQuantidade()),
+                        () -> {
+                            dadosItem.setComanda(comanda);
+                            dadosItem.setProduto(produto);
+                            dadosItem.setNomeProduto(produto.getNome());
+                            dadosItem.setPrecoUnitario(produto.getPreco());
+                            comanda.getItens().add(dadosItem);
+                        }
+                );
 
-        if (itemExistente.isPresent()) {
-            // Se já existe, apenas aumenta a quantidade
-            ItemPedido item = itemExistente.get();
-            item.setQuantidade(item.getQuantidade() + dadosItem.getQuantidade());
-        } else {
-            // Se é novo, cria com o vínculo do produto
-            ItemPedido novoItem = ItemPedido.builder()
-                    .comanda(comanda)
-                    .produto(produto) // <--- Vínculo criado aqui
-                    .nomeProduto(produto.getNome())
-                    .precoUnitario(produto.getPreco())
-                    .quantidade(dadosItem.getQuantidade())
-                    .observacao(dadosItem.getObservacao())
-                    .meiaPorcao(dadosItem.isMeiaPorcao())
-                    .build();
-            comanda.getItens().add(novoItem);
+        atualizarSaldoTotal(comanda);
+        auditoriaService.registrarAcao(comanda, AcaoComanda.ITEM_ADICIONADO,
+                String.format("Lançado: %s x%d", produto.getNome(), dadosItem.getQuantidade()), usuario);
+
+        return comandaRepository.save(comanda);
+    }
+
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
+    public Comanda estornarItem(Long comandaId, Long itemId, String usuario) {
+        // 1. Busca a comanda e garante que ela existe
+        Comanda comanda = buscarPorIdOuFalhar(comandaId);
+
+        // 2. Valida se a mesa permite alterações (não pode estar LIVRE nem em AGUARDANDO_PAGAMENTO)
+        garantirMesaOcupada(comanda.getMesa());
+
+        // 3. Localiza o item dentro da lista da comanda
+        ItemPedido itemParaEstornar = comanda.getItens().stream()
+                .filter(i -> i.getId().equals(itemId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Item não encontrado nesta comanda."));
+
+        // 4. Auditoria: Registra o estorno ANTES de remover (para ter os dados do item no log)
+        String detalheEstorno = String.format("ESTORNO: %s (Qtd: %d) - Valor: R$ %s",
+                itemParaEstornar.getNomeProduto(),
+                itemParaEstornar.getQuantidade(),
+                itemParaEstornar.getTotalItem());
+
+        auditoriaService.registrarAcao(comanda, AcaoComanda.ITEM_REMOVIDO, detalheEstorno, usuario);
+
+        // 5. Remove o item e atualiza o saldo da comanda
+        comanda.getItens().remove(itemParaEstornar);
+        atualizarSaldoTotal(comanda);
+
+        // 6. Salva as alterações
+        return comandaRepository.save(comanda);
+    }
+
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')") // Geralmente restrito ao Admin/Gerente
+    public Comanda reabrirAtendimento(Long comandaId, String usuario) {
+        // 1. Busca a comanda
+        Comanda comanda = buscarPorIdOuFalhar(comandaId);
+        Mesa mesa = comanda.getMesa();
+
+        // 2. Validação: Só faz sentido reabrir se a mesa estiver travada no financeiro
+        if (mesa.getStatus() != StatusMesa.AGUARDANDO_PAGAMENTO) {
+            throw new IllegalStateException("Apenas mesas em 'Aguardando Pagamento' podem ser reabertas.");
         }
 
-        recalcularTotalComanda(comanda);
+        // 3. Volta o status físico da Mesa para OCUPADA (libera para novos itens)
+        mesa.setStatus(StatusMesa.OCUPADA);
+        mesaRepository.save(mesa);
 
-        registrarHistorico(comanda, AcaoComanda.ITEM_ADICIONADO,
-                String.format("Item: %s (Qtd: %d)", produto.getNome(), dadosItem.getQuantidade()));
+        // 4. Registra a auditoria da reabertura
+        auditoriaService.registrarAcao(
+                comanda,
+                AcaoComanda.REABERTA,
+                "Atendimento reaberto para lançamento de novos itens.",
+                usuario
+        );
 
-        return comandaRepository.save(comanda);
+        // 5. Retorna a comanda atualizada
+        return comanda;
     }
 
     @Transactional
-    public Comanda removerItem(Long comandaId, Long itemId) {
-        log.info("Removendo item {} da comanda {}", itemId, comandaId);
-        Comanda comanda = findComandaByIdOrThrow(comandaId);
-        validarComandaAberta(comanda);
+    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
+    public Comanda solicitarFechamento(Long comandaId, String usuario) {
+        Comanda comanda = buscarPorIdOuFalhar(comandaId);
+        Mesa mesa = comanda.getMesa();
 
-        ItemPedido itemParaRemover = comanda.getItens().stream()
-                .filter(item -> item.getId().equals(itemId))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("Item com ID " + itemId + " não encontrado na comanda."));
+        if (mesa.getStatus() != StatusMesa.OCUPADA) {
+            throw new IllegalStateException("A mesa precisa estar ocupada para solicitar o fechamento.");
+        }
 
-        comanda.getItens().remove(itemParaRemover);
-        recalcularTotalComanda(comanda);
+        // A Mesa passa a aguardar o financeiro
+        mesa.setStatus(StatusMesa.AGUARDANDO_PAGAMENTO);
+        mesaRepository.save(mesa);
 
-        registrarHistorico(comanda, AcaoComanda.ITEM_REMOVIDO,
-                String.format("Item: %s (Qtd: %d)", itemParaRemover.getNomeProduto(), itemParaRemover.getQuantidade()));
-
-        return comandaRepository.save(comanda);
+        auditoriaService.registrarAcao(comanda, AcaoComanda.FECHADA, "Pedido de conta realizado.", usuario);
+        return comanda;
     }
 
     @Transactional
-    public Comanda fecharComanda(Long comandaId) {
-        log.info("Fechando comanda {}", comandaId);
-        Comanda comanda = findComandaByIdOrThrow(comandaId);
-        validarComandaAberta(comanda);
+    @PreAuthorize("hasRole('ADMIN')")
+    public void finalizarAtendimento(Long comandaId, String usuarioCaixa) {
+        Comanda comanda = buscarPorIdOuFalhar(comandaId);
+        Mesa mesa = comanda.getMesa();
 
-        comanda.setStatus(StatusComanda.OCUPADA);
-        recalcularTotalComanda(comanda); // Garante que o total está correto ao fechar
+        if (mesa.getStatus() != StatusMesa.AGUARDANDO_PAGAMENTO) {
+            throw new IllegalStateException("A mesa precisa estar em conferência para ser finalizada.");
+        }
 
-        registrarHistorico(comanda, AcaoComanda.FECHADA, "Comanda fechada com total de R$ " + comanda.getTotal());
-        return comandaRepository.save(comanda);
-    }
+        // 1. Snapshot para Auditoria/BI
+        auditoriaService.salvarSnapshotVenda(comanda, usuarioCaixa);
 
-    @Transactional
-    public void confirmarRecebimento(Long comandaId, String usuario) {
-        log.info("Confirmando recebimento da comanda {} pelo usuário {}", comandaId, usuario);
-        Comanda comanda = findComandaByIdOrThrow(comandaId);
-
-        // Idealmente, a comanda deve estar FECHADA para confirmar o recebimento, mas não é uma regra obrigatória no prompt
-        // if(comanda.getStatus() != StatusComanda.FECHADA) {
-        //     throw new IllegalStateException("Apenas comandas fechadas podem ter o recebimento confirmado.");
-        // }
-
+        // 2. Financeiro
         ComandaRecebimento recebimento = ComandaRecebimento.builder()
                 .comanda(comanda)
-                .usuario(usuario)
+                .valor(comanda.getTotal())
+                .usuario(usuarioCaixa)
                 .build();
         recebimentoRepository.save(recebimento);
-        log.info("Recebimento da comanda {} confirmado.", comandaId);
+
+        // 3. Libera a Mesa fisicamente
+        mesa.setStatus(StatusMesa.DISPONIVEL);
+        mesaRepository.save(mesa);
+
+        auditoriaService.registrarAcao(comanda, AcaoComanda.FECHADA, "Pagamento confirmado e mesa liberada.", usuarioCaixa);
+
+        // No modelo novo, NÃO damos comanda.getItens().clear() nem resetamos o total.
+        // A comanda fica salva como ela foi. O "listarComandasAtivas" cuidará de não mostrá-la mais.
     }
 
+    // --- AUXILIARES ---
 
-    private void recalcularTotalComanda(Comanda comanda) {
+    private void garantirMesaOcupada(Mesa mesa) {
+        if (mesa.getStatus() == StatusMesa.DISPONIVEL) {
+            throw new IllegalStateException("A mesa está livre. Inicie o atendimento primeiro.");
+        }
+        if (mesa.getStatus() == StatusMesa.AGUARDANDO_PAGAMENTO) {
+            throw new IllegalStateException("Mesa em fechamento. Reabra para alterar itens.");
+        }
+    }
+
+    private void atualizarSaldoTotal(Comanda comanda) {
         BigDecimal novoTotal = comanda.getItens().stream()
-                .map(item -> item.getPrecoEfetivo().multiply(BigDecimal.valueOf(item.getQuantidade())))
+                .map(ItemPedido::getTotalItem)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         comanda.setTotal(novoTotal);
     }
 
-    private Comanda findComandaByIdOrThrow(Long comandaId) {
+    private Comanda buscarPorIdOuFalhar(Long comandaId) {
         return comandaRepository.findById(comandaId)
-                .orElseThrow(() -> new RuntimeException("Comanda com ID " + comandaId + " não encontrada."));
-    }
-
-    private void validarComandaAberta(Comanda comanda) {
-        if (comanda.getStatus() != StatusComanda.DISPONIVEL) {
-            throw new IllegalStateException("Operação não permitida. A comanda " + comanda.getId() + " não está DISPONIVEL.");
-        }
-    }
-
-    private void registrarHistorico(Comanda comanda, AcaoComanda acao, String detalhes) {
-        ComandaHistorico historico = ComandaHistorico.builder()
-                .comanda(comanda)
-                .acao(acao)
-                .detalhes(detalhes)
-                .build();
-        historicoRepository.save(historico);
+                .orElseThrow(() -> new RuntimeException("Comanda não encontrada."));
     }
 }
