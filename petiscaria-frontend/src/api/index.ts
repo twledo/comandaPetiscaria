@@ -1,6 +1,6 @@
-import type { AuthUser, Comanda, LoginResponse, Mesa, PageResponse, Produto } from '../types/index.ts';
+import type { AuthUser, Comanda, LoginResponse, Mesa, PageResponse, Produto } from '../types';
 
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = 'http://192.168.100.184:8080';
 
 function getToken(): string | null {
     const raw = localStorage.getItem('petiscaria_auth');

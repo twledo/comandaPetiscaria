@@ -4,11 +4,14 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import dev.petiscaria.comandas.enuns.StatusMesa;
 import dev.petiscaria.comandas.models.comanda.Comanda;
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
 
 @Entity
 @Table(name = "mesas")
-@Data
+@Getter // Melhor que @Data para evitar loops
+@Setter
+@ToString(exclude = "comandaAtiva") // ESSENCIAL: Impede o loop no log
+@EqualsAndHashCode(exclude = "comandaAtiva") // ESSENCIAL: Impede o loop em coleções
 public class Mesa {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -19,7 +22,7 @@ public class Mesa {
     @Enumerated(EnumType.STRING)
     private StatusMesa status;
 
-    @Transient // Não cria coluna no banco
-    @JsonIgnoreProperties("mesa") // Impede que a comanda tente serializar a mesa de volta
+    @Transient
+    @JsonIgnoreProperties("mesa")
     private Comanda comandaAtiva;
 }

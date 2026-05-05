@@ -14,8 +14,10 @@ import dev.petiscaria.comandas.repository.comanda.ComandaRepository;
 import dev.petiscaria.comandas.repository.mesa.MesaRepository;
 import dev.petiscaria.comandas.repository.produto.ProdutoRepository;
 import dev.petiscaria.comandas.service.audit.AuditoriaService;
+import dev.petiscaria.comandas.service.mesa.MesaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,9 +35,11 @@ public class ComandaService {
 
     private final ComandaRepository comandaRepository;
     private final MesaRepository mesaRepository;
+    private final MesaService mesaService;
     private final ProdutoRepository produtoRepository;
     private final ComandaRecebimentoRepository recebimentoRepository;
     private final AuditoriaService auditoriaService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
@@ -79,6 +83,8 @@ public class ComandaService {
 
         comanda = comandaRepository.saveAndFlush(comanda);
         auditoriaService.registrarAcao(comanda, AcaoComanda.ABERTA, "Atendimento iniciado na mesa " + mesa.getNumero(), usuario);
+
+        notificarMudancaMesas();
         return comanda;
     }
 
@@ -111,25 +117,22 @@ public class ComandaService {
         auditoriaService.registrarAcao(comanda, AcaoComanda.ITEM_ADICIONADO,
                 String.format("Lançado: %s x%d", produto.getNome(), dadosItem.getQuantidade()), usuario);
 
+        notificarMudancaMesas();
         return comandaRepository.save(comanda);
     }
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
     public Comanda estornarItem(Long comandaId, Long itemId, String usuario) {
-        // 1. Busca a comanda e garante que ela existe
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
 
-        // 2. Valida se a mesa permite alterações (não pode estar LIVRE nem em AGUARDANDO_PAGAMENTO)
         garantirMesaOcupada(comanda.getMesa());
 
-        // 3. Localiza o item dentro da lista da comanda
         ItemPedido itemParaEstornar = comanda.getItens().stream()
                 .filter(i -> i.getId().equals(itemId))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Item não encontrado nesta comanda."));
 
-        // 4. Auditoria: Registra o estorno ANTES de remover (para ter os dados do item no log)
         String detalheEstorno = String.format("ESTORNO: %s (Qtd: %d) - Valor: R$ %s",
                 itemParaEstornar.getNomeProduto(),
                 itemParaEstornar.getQuantidade(),
@@ -137,11 +140,10 @@ public class ComandaService {
 
         auditoriaService.registrarAcao(comanda, AcaoComanda.ITEM_REMOVIDO, detalheEstorno, usuario);
 
-        // 5. Remove o item e atualiza o saldo da comanda
         comanda.getItens().remove(itemParaEstornar);
         atualizarSaldoTotal(comanda);
 
-        // 6. Salva as alterações
+        notificarMudancaMesas();
         return comandaRepository.save(comanda);
     }
 
@@ -166,6 +168,7 @@ public class ComandaService {
                 usuario
         );
 
+        notificarMudancaMesas();
         return comanda;
     }
 
@@ -185,6 +188,8 @@ public class ComandaService {
 
         mesaRepository.save(mesa);
         auditoriaService.registrarAcao(comanda, AcaoComanda.FECHADA, "Pedido de conta realizado.", usuario);
+
+        notificarMudancaMesas();
         return comandaRepository.save(comanda);
     }
 
@@ -227,6 +232,7 @@ public class ComandaService {
             comanda.getMesa().setStatus(StatusMesa.DISPONIVEL);
         }
 
+        notificarMudancaMesas();
         return comandaRepository.save(comanda);
     }
 
@@ -256,6 +262,7 @@ public class ComandaService {
         comandaRepository.save(comanda);
 
         auditoriaService.registrarAcao(comanda, AcaoComanda.FECHADA, "Pagamento confirmado e mesa liberada.", usuarioCaixa);
+        notificarMudancaMesas();
     }
 
     // --- AUXILIARES ---
@@ -279,5 +286,11 @@ public class ComandaService {
     private Comanda buscarPorIdOuFalhar(Long comandaId) {
         return comandaRepository.findById(comandaId)
                 .orElseThrow(() -> new RuntimeException("Comanda não encontrada."));
+    }
+
+    private void notificarMudancaMesas() {
+        log.info("Enviando atualização de mesas via WebSocket para todos os dispositivos...");
+        List<Mesa> listaAtualizada = mesaService.listarTodas();
+        messagingTemplate.convertAndSend("/topic/mesas", listaAtualizada);
     }
 }

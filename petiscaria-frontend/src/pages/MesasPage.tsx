@@ -4,6 +4,7 @@ import type { Mesa, StatusMesa } from 'types';
 import MesaCard from '../components/mesas/MesaCard';
 import MesaModal from '../components/mesas/MesaModal';
 import styles from './MesasPage.module.css';
+import { useMesasWebSocket } from "../hook/useMesasWebSocket";
 
 // Definição dos filtros para garantir consistência
 const FILTROS: { label: string; value: StatusMesa | 'TODAS' }[] = [
@@ -22,6 +23,7 @@ export default function MesasPage() {
 
     // Função para carregar dados da API
     const load = useCallback(async () => {
+        setLoading(true);
         try {
             const data = await mesasApi.listarTodas();
             setMesas(Array.isArray(data) ? data : []);
@@ -35,9 +37,11 @@ export default function MesasPage() {
     // Ciclo de vida e Auto-refresh
     useEffect(() => {
         load();
-        const interval = setInterval(load, 500000);
-        return () => clearInterval(interval);
     }, [load]);
+
+    useMesasWebSocket(useCallback((listaAtualizada: Mesa[]) => {
+        setMesas(listaAtualizada);
+    }, []));
 
     // Lógica de Filtro e Contagem (Processa tudo em um único loop)
     const { filtered, counts } = useMemo(() => {

@@ -33,17 +33,29 @@ public class SecurityConfig {
         return http
                 .cors(cors -> cors.configurationSource(request -> {
                     var config = new org.springframework.web.cors.CorsConfiguration();
-                    config.setAllowedOrigins(java.util.List.of("http://localhost:5173")); // URL do seu Vite
+
+                    // MODIFICAÇÃO AQUI:
+                    // Usamos AllowedOriginPatterns para aceitar localhost e o IP da rede
+                    config.setAllowedOriginPatterns(java.util.List.of(
+                            "http://localhost:5173",
+                            "http://192.168.100.184:5173", // Seu IP atual
+                            "http://192.168.100.*:5173"    // Qualquer dispositivo na sua rede
+                    ));
+
                     config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
                     config.setAllowedHeaders(java.util.List.of("*"));
                     config.setAllowCredentials(true);
                     return config;
                 }))
                 .csrf(csrf -> csrf.disable())
+                // IMPORTANTE para SockJS funcionar corretamente:
+                .headers(headers -> headers.frameOptions(frame -> frame.disable()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(req -> {
-                    // IMPORTANTE: Liberar o OPTIONS para todas as rotas por causa do CORS
                     req.requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll();
+
+                    // Liberar o Handshake do WebSocket ANTES das outras regras
+                    req.requestMatchers("/ws-petiscaria/**").permitAll();
 
                     req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/login").permitAll();
                     req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/registrar").permitAll();

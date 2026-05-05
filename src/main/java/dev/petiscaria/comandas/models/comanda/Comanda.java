@@ -17,10 +17,13 @@ import java.util.List;
 
 @Entity
 @Table(name = "comandas")
-@Data // ESSENCIAL: Cria Getters, Setters, Equals e HashCode
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString(exclude = "mesa") // ESSENCIAL: Não deixa a comanda printar a mesa
+@EqualsAndHashCode(exclude = "mesa") // ESSENCIAL
 public class Comanda {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,7 +31,7 @@ public class Comanda {
 
     @ManyToOne
     @JoinColumn(name = "mesa_id", nullable = false)
-    @JsonIgnoreProperties({"status", "comandaAtiva"})
+    @JsonIgnoreProperties({"comandaAtiva"}) // Simplifique para ignorar o que volta
     private Mesa mesa;
 
     private String nomeCliente;
@@ -41,8 +44,6 @@ public class Comanda {
     private List<ItemPedido> itens = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    @Builder.Default
     private StatusComanda status = StatusComanda.ABERTA;
 
     @CreationTimestamp
