@@ -1,16 +1,19 @@
-import { useState, useEffect } from 'react';
-import { produtosApi, comandasApi } from '../../api';
-import type { Comanda, Mesa, Produto, CategoriaProduto, CarrinhoItem } from '../../types';
+import {useState, useEffect} from 'react';
+import {produtosApi, comandasApi} from '../../api';
+import type {Comanda, Mesa, Produto, CategoriaProduto, CarrinhoItem} from '../../types';
 import styles from './LancarItensModal.module.css';
 
-const CATEGORIAS: { label: string; value: CategoriaProduto | '' }[] = [
-    { label: 'Todas', value: '' },
-    { label: 'Bebidas', value: 'BEBIDA' },
-    { label: 'Porções', value: 'PORCAO' },
-    { label: 'Pratos', value: 'PRATO' },
-    { label: 'Sobremesas', value: 'SOBREMESA' },
-    { label: 'Outros', value: 'OUTROS' },
-];
+const CATEGORIAS: { label: string; value: number | '' }[] = [
+    {label: 'Todas', value: ''},
+    {label: 'Espetinhos', value: 1},
+    {label: 'Porções', value: 2},
+    {label: 'Bebidas', value: 3},
+    {label: 'Mini Pizza', value: 4},
+    {label: 'Lanches', value: 5},
+    {label: 'Acompanhamento', value: 6},
+    {label: 'Refeições', value: 7},
+    {label: 'Outros', value: 8},
+]
 
 interface Props {
     comanda: Comanda;
@@ -19,18 +22,25 @@ interface Props {
     onRefresh: () => Promise<void>;
 }
 
-export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: Props) {
+export const TAXA_MEIA_PORCAO = 0.6;
+
+export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Props) {
     const [produtos, setProdutos] = useState<Produto[]>([]);
     const [busca, setBusca] = useState('');
-    const [categoria, setCategoria] = useState<CategoriaProduto | ''>('');
+    const [categoria, setCategoria] = useState<number | ''>(''); // Agora aceita number
     const [carrinho, setCarrinho] = useState<CarrinhoItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
+        setLoading(true);
         produtosApi
-            .buscarCardapio({ nome: busca || undefined, categoria: categoria || undefined, size: 100 })
+            .buscarCardapio({
+                nome: busca || undefined,
+                categoria: categoria !== '' ? categoria : undefined, // Envia o ID
+                size: 100
+            })
             .then(r => setProdutos(r.content))
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -42,11 +52,11 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
             if (exist) {
                 return prev.map(i =>
                     i.produto.id === produto.id && i.meiaPorcao === meiaPorcao
-                        ? { ...i, quantidade: i.quantidade + 1 }
+                        ? {...i, quantidade: i.quantidade + 1}
                         : i
                 );
             }
-            return [...prev, { produto, quantidade: 1, meiaPorcao }];
+            return [...prev, {produto, quantidade: 1, meiaPorcao}];
         });
     }
 
@@ -55,7 +65,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
             prev
                 .map(i =>
                     i.produto.id === produtoId && i.meiaPorcao === meiaPorcao
-                        ? { ...i, quantidade: i.quantidade - 1 }
+                        ? {...i, quantidade: i.quantidade - 1}
                         : i
                 )
                 .filter(i => i.quantidade > 0)
@@ -63,7 +73,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
     }
 
     const totalCarrinho = carrinho.reduce(
-        (acc, i) => acc + Number(i.produto.preco) * (i.meiaPorcao ? 0.5 : 1) * i.quantidade,
+        (acc, i) => acc + Number(i.produto.preco) * (i.meiaPorcao ? TAXA_MEIA_PORCAO : 1) * i.quantidade,
         0
     );
 
@@ -126,7 +136,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                         {/* Products */}
                         {loading ? (
                             <div className={styles.loadingState}>
-                                <span className={styles.spinner} /> Carregando...
+                                <span className={styles.spinner}/> Carregando...
                             </div>
                         ) : (
                             <div className={styles.produtosList}>
@@ -198,15 +208,17 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                                             <button
                                                 className={styles.controlBtn}
                                                 onClick={() => removeCarrinho(item.produto.id, item.meiaPorcao)}
-                                            >−</button>
+                                            >−
+                                            </button>
                                             <span>{item.quantidade}</span>
                                             <button
                                                 className={styles.controlBtn}
                                                 onClick={() => addCarrinho(item.produto, item.meiaPorcao)}
-                                            >+</button>
+                                            >+
+                                            </button>
                                         </div>
                                         <span className={styles.carrinhoItemTotal}>
-                      R$ {(Number(item.produto.preco) * (item.meiaPorcao ? 0.5 : 1) * item.quantidade)
+                      R$ {(Number(item.produto.preco) * (item.meiaPorcao ? TAXA_MEIA_PORCAO : 1) * item.quantidade)
                                             .toFixed(2).replace('.', ',')}
                     </span>
                                     </li>
@@ -228,7 +240,8 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                                     onClick={confirmar}
                                     disabled={enviando}
                                 >
-                                    {enviando ? <><span className={styles.spinner} /> Enviando...</> : '✓ Confirmar Pedido'}
+                                    {enviando ? <><span
+                                        className={styles.spinner}/> Enviando...</> : '✓ Confirmar Pedido'}
                                 </button>
                             </div>
                         )}

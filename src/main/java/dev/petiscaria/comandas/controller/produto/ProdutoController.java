@@ -38,12 +38,15 @@ public class ProdutoController {
         return service.alternarDisponibilidade(id);
     }
 
+    // ProdutoController.java
     @GetMapping("/cardapio/filtro")
     public Page<Produto> filtrar(
             @RequestParam(required = false) String nome,
-            @RequestParam(required = false) CategoriaProduto categoria,
+            @RequestParam(required = false) Integer categoria, // Receba como Integer
             Pageable pageable
     ) {
-        return service.buscarCardapio(nome, categoria, pageable);
+        // Converte usando seu método fromId
+        CategoriaProduto categoriaEnum = (categoria != null) ? CategoriaProduto.fromId(categoria) : null;
+        return service.buscarCardapio(nome, categoriaEnum, pageable);
     }
 }

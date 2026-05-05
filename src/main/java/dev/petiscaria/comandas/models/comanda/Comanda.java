@@ -1,6 +1,8 @@
 package dev.petiscaria.comandas.models.comanda;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.petiscaria.comandas.enuns.StatusComanda;
 import dev.petiscaria.comandas.enuns.StatusMesa;
 import dev.petiscaria.comandas.models.mesa.Mesa;
 import jakarta.persistence.*;
@@ -26,7 +28,10 @@ public class Comanda {
 
     @ManyToOne
     @JoinColumn(name = "mesa_id", nullable = false)
+    @JsonIgnoreProperties({"status", "comandaAtiva"})
     private Mesa mesa;
+
+    private String nomeCliente;
 
     @Builder.Default
     private BigDecimal total = BigDecimal.ZERO;
@@ -34,6 +39,11 @@ public class Comanda {
     @OneToMany(mappedBy = "comanda", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ItemPedido> itens = new ArrayList<>();
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    @Builder.Default
+    private StatusComanda status = StatusComanda.ABERTA;
 
     @CreationTimestamp
     private LocalDateTime createdAt;

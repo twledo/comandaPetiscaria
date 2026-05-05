@@ -1,6 +1,7 @@
 package dev.petiscaria.comandas.service.mesa;
 
 import dev.petiscaria.comandas.enuns.StatusMesa;
+import dev.petiscaria.comandas.models.comanda.Comanda;
 import dev.petiscaria.comandas.models.mesa.Mesa;
 import dev.petiscaria.comandas.repository.comanda.ComandaRepository;
 import dev.petiscaria.comandas.repository.mesa.MesaRepository;
@@ -19,19 +20,28 @@ public class MesaService {
     private final MesaRepository mesaRepository;
     private final ComandaRepository comandaRepository;
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<Mesa> listarTodas() {
-        // 1. Busca ABSOLUTAMENTE TODAS as mesas do banco
-        List<Mesa> mesas = mesaRepository.findAll();
+        // 1. Busca todas as mesas JÁ ORDENADAS por número
+        List<Mesa> mesas = mesaRepository.findAllByOrderByNumeroAsc();
 
         log.info("Total de mesas encontradas no banco: {}", mesas.size());
 
         for (Mesa mesa : mesas) {
-            // 2. Só tentamos buscar comanda se a mesa NÃO estiver disponível
-            // mas a mesa CONTINUA na lista mesmo se estiver disponível
+            // 2. Só buscamos se não estiver disponível
             if (mesa.getStatus() != StatusMesa.DISPONIVEL) {
-                comandaRepository.findByMesaIdAtiva(mesa.getId())
-                        .ifPresent(mesa::setComandaAtiva);
+                List<Comanda> comandas = comandaRepository.findByMesaIdAtiva(mesa.getId());
+
+                if (!comandas.isEmpty()) {
+                    // Se houver mais de uma, pegamos a primeira (ou a mais recente)
+                    // Isso evita o erro de 'Unique Result' que deu tela branca
+                    mesa.setComandaAtiva(comandas.get(0));
+
+                    if (comandas.size() > 1) {
+                        log.warn("Mesa {} possui {} comandas ativas! Verifique integridade do banco.",
+                                mesa.getNumero(), comandas.size());
+                    }
+                }
             }
         }
         return mesas;
@@ -39,6 +49,6 @@ public class MesaService {
 
     @Transactional(readOnly = true)
     public List<Mesa> listarMesasDisponiveis() {
-        return mesaRepository.findByStatus(StatusMesa.DISPONIVEL);
+        return mesaRepository.findByStatusOrderByNumeroAsc(StatusMesa.DISPONIVEL);
     }
 }

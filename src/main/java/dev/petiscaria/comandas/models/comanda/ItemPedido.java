@@ -1,6 +1,7 @@
 package dev.petiscaria.comandas.models.comanda;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.petiscaria.comandas.models.produto.Produto;
 import jakarta.persistence.*;
 import lombok.*;
@@ -33,16 +34,22 @@ public class ItemPedido {
     private String observacao;
     private boolean meiaPorcao = false;
 
-    public BigDecimal getPrecoEfetivo() {
-        BigDecimal preco = (precoUnitario != null) ? precoUnitario : BigDecimal.ZERO;
-        if (meiaPorcao) {
-            return preco.multiply(new BigDecimal("0.6"));
+
+    @JsonProperty("totalItem") // Aparecerá no seu JSON do Frontend
+    public BigDecimal getTotalItem() {
+        if (this.precoUnitario == null) return BigDecimal.ZERO;
+        BigDecimal total = this.precoUnitario.multiply(new BigDecimal(this.quantidade));
+        if (this.meiaPorcao) {
+            return total.multiply(new BigDecimal("0.6"));
         }
-        return preco;
+        return total;
     }
 
-    // Método utilitário para calcular o total deste item (Preço * Qtd)
-    public BigDecimal getTotalItem() {
-        return getPrecoEfetivo().multiply(new BigDecimal(quantidade));
+    @JsonProperty("precoEfetivo") // Útil para mostrar o preço de 1 unidade de "meia"
+    public BigDecimal getPrecoEfetivo() {
+        if (this.precoUnitario == null) return BigDecimal.ZERO;
+        return this.meiaPorcao ?
+                this.precoUnitario.multiply(new BigDecimal("0.6")) :
+                this.precoUnitario;
     }
 }

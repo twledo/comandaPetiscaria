@@ -13,6 +13,7 @@ interface Props {
 
 export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
     const { isAdmin } = useAuth();
+    const [nomeCliente, setNomeCliente] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showLancar, setShowLancar] = useState(false);
@@ -60,15 +61,27 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
                     {/* DISPONIVEL */}
                     {mesa.status === 'DISPONIVEL' && (
                         <div className={styles.section}>
-                            <p className={styles.description}>
-                                Mesa livre. Clique abaixo para iniciar o atendimento e criar uma nova comanda.
-                            </p>
+                            <div style={{ marginBottom: '0.5rem' }}>
+                                <h3 style={{ color: 'var(--text)', marginBottom: '4px' }}>Novo Atendimento</h3>
+                                <p className={styles.description}>Identifique o cliente para iniciar:</p>
+                            </div>
+
+                            <input
+                                type="text"
+                                className={styles.inputNome}
+                                placeholder="Ex: João Silva"
+                                value={nomeCliente}
+                                onChange={(e) => setNomeCliente(e.target.value)}
+                                disabled={loading}
+                                autoFocus // Foca automaticamente ao abrir
+                            />
+
                             <button
                                 className={`${styles.btn} ${styles.btnPrimary}`}
-                                onClick={() => exec(() => comandasApi.abrir(mesa.id))}
-                                disabled={loading}
+                                onClick={() => exec(() => comandasApi.abrir(mesa.id, nomeCliente))}
+                                disabled={loading || !nomeCliente.trim()}
                             >
-                                {loading ? <Spinner /> : '▶ Iniciar Atendimento'}
+                                {loading ? <Spinner /> : '▶ Abrir Mesa e Iniciar'}
                             </button>
                         </div>
                     )}
@@ -167,7 +180,12 @@ function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']>
     return (
         <div className={styles.itensSection}>
             <div className={styles.itensHeader}>
-                <span>Itens da Comanda #{comanda.id}</span>
+                <div className={styles.comandaInfo}>
+                    <span className={styles.comandaId}>Itens da Comanda #{comanda.id}</span>
+                    {comanda.nomeCliente && (
+                        <span className={styles.clienteNome}> - {comanda.nomeCliente.toUpperCase() || "NOME VAZIO (Contatar Thiago)"}</span>
+                    )}
+                </div>
                 <span className={styles.itensCount}>{comanda.itens.length} itens</span>
             </div>
 

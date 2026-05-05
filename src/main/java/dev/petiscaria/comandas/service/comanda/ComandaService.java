@@ -1,6 +1,8 @@
 package dev.petiscaria.comandas.service.comanda;
 
 import dev.petiscaria.comandas.enuns.AcaoComanda;
+import dev.petiscaria.comandas.enuns.MetodoPagamento;
+import dev.petiscaria.comandas.enuns.StatusComanda;
 import dev.petiscaria.comandas.enuns.StatusMesa;
 import dev.petiscaria.comandas.models.comanda.Comanda;
 import dev.petiscaria.comandas.models.comanda.ComandaRecebimento;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -36,27 +39,45 @@ public class ComandaService {
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
-    public Comanda iniciarAtendimento(Long mesaId, String usuario) {
+    public Comanda iniciarAtendimento(Long mesaId, String usuario, String nomeCliente) {
+        boolean possuiAberta = comandaRepository.existsByMesaIdAndStatus(mesaId, StatusComanda.ABERTA);
+
+        if (possuiAberta) {
+            throw new RuntimeException("Já existe um atendimento ativo para esta mesa!");
+        }
+
+        if (nomeCliente == null || nomeCliente.trim().isEmpty()) {
+            throw new RuntimeException("O nome do cliente é obrigatório para iniciar o atendimento.");
+        }
+
         Mesa mesa = mesaRepository.findById(mesaId)
                 .orElseThrow(() -> new RuntimeException("Mesa não encontrada."));
 
+        // Se a mesa já está OCUPADA, precisamos achar a comanda que está "segurando" ela
         if (mesa.getStatus() == StatusMesa.OCUPADA) {
-            return comandaRepository.findByMesaAndStatusAtivo(mesa)
-                    .orElseThrow(() -> new RuntimeException("Mesa ocupada mas comanda não encontrada."));
+            // Mudamos para buscar uma LISTA para evitar o erro de 'NonUniqueResult'
+            List<Comanda> comandasAtivas = comandaRepository.findByMesaIdAtiva(mesa.getId());
+
+            if (comandasAtivas.isEmpty()) {
+                throw new RuntimeException("Mesa ocupada mas comanda não encontrada.");
+            }
+
+            // Retornamos a mais recente (assumindo que a lista vem ordenada ou pegando a primeira)
+            return comandasAtivas.get(0);
         }
 
         // 1. Atualiza o status físico da Mesa
         mesa.setStatus(StatusMesa.OCUPADA);
         mesaRepository.save(mesa);
 
-        // 2. Cria uma nova Comanda (Registro do atendimento)
         Comanda comanda = Comanda.builder()
                 .mesa(mesa)
+                .nomeCliente(nomeCliente)
                 .total(BigDecimal.ZERO)
+                .status(StatusComanda.ABERTA)
                 .build();
 
         comanda = comandaRepository.saveAndFlush(comanda);
-
         auditoriaService.registrarAcao(comanda, AcaoComanda.ABERTA, "Atendimento iniciado na mesa " + mesa.getNumero(), usuario);
         return comanda;
     }
@@ -127,20 +148,17 @@ public class ComandaService {
     @Transactional
     @PreAuthorize("hasRole('ADMIN')") // Geralmente restrito ao Admin/Gerente
     public Comanda reabrirAtendimento(Long comandaId, String usuario) {
-        // 1. Busca a comanda
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         Mesa mesa = comanda.getMesa();
 
-        // 2. Validação: Só faz sentido reabrir se a mesa estiver travada no financeiro
         if (mesa.getStatus() != StatusMesa.AGUARDANDO_PAGAMENTO) {
             throw new IllegalStateException("Apenas mesas em 'Aguardando Pagamento' podem ser reabertas.");
         }
 
-        // 3. Volta o status físico da Mesa para OCUPADA (libera para novos itens)
+        comanda.setStatus(StatusComanda.ABERTA);
         mesa.setStatus(StatusMesa.OCUPADA);
         mesaRepository.save(mesa);
 
-        // 4. Registra a auditoria da reabertura
         auditoriaService.registrarAcao(
                 comanda,
                 AcaoComanda.REABERTA,
@@ -148,7 +166,6 @@ public class ComandaService {
                 usuario
         );
 
-        // 5. Retorna a comanda atualizada
         return comanda;
     }
 
@@ -164,10 +181,53 @@ public class ComandaService {
 
         // A Mesa passa a aguardar o financeiro
         mesa.setStatus(StatusMesa.AGUARDANDO_PAGAMENTO);
-        mesaRepository.save(mesa);
+        comanda.setStatus(StatusComanda.AGUARDANDO_PAGAMENTO); // Atualiza a comanda
 
+        mesaRepository.save(mesa);
         auditoriaService.registrarAcao(comanda, AcaoComanda.FECHADA, "Pedido de conta realizado.", usuario);
-        return comanda;
+        return comandaRepository.save(comanda);
+    }
+
+    @Transactional
+    public Comanda pagarItensEspecificos(Long comandaId, List<Long> itensIds, MetodoPagamento metodo) {
+        Comanda comanda = buscarPorIdOuFalhar(comandaId);
+
+        // 1. Filtrar os itens da comanda que foram selecionados no Front
+        List<ItemPedido> itensParaPagar = comanda.getItens().stream()
+                .filter(item -> itensIds.contains(item.getId()))
+                .toList();
+
+        if (itensParaPagar.isEmpty()) {
+            throw new RuntimeException("Nenhum item válido selecionado para pagamento.");
+        }
+
+        // 2. Calcular o valor total desse grupo de itens (usando sua regra de 60% se for meia)
+        BigDecimal totalPagoAgora = itensParaPagar.stream()
+                .map(ItemPedido::getTotalItem)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 3. Registrar o Recebimento no Financeiro
+        ComandaRecebimento recebimento = ComandaRecebimento.builder()
+                .comanda(comanda)
+                .valor(totalPagoAgora)
+                .metodoPagamento(metodo)
+                .dataRecebimento(LocalDateTime.now())
+                .build();
+        recebimentoRepository.save(recebimento);
+
+        // 4. Remover os itens da comanda ativa (eles já foram pagos)
+        comanda.getItens().removeAll(itensParaPagar);
+
+        // 5. Recalcular o saldo devedor da comanda
+        atualizarSaldoTotal(comanda);
+
+        // 6. Se a comanda ficar vazia, fechar o atendimento automaticamente
+        if (comanda.getItens().isEmpty()) {
+            comanda.setStatus(StatusComanda.FINALIZADA);
+            comanda.getMesa().setStatus(StatusMesa.DISPONIVEL);
+        }
+
+        return comandaRepository.save(comanda);
     }
 
     @Transactional
@@ -180,10 +240,8 @@ public class ComandaService {
             throw new IllegalStateException("A mesa precisa estar em conferência para ser finalizada.");
         }
 
-        // 1. Snapshot para Auditoria/BI
         auditoriaService.salvarSnapshotVenda(comanda, usuarioCaixa);
 
-        // 2. Financeiro
         ComandaRecebimento recebimento = ComandaRecebimento.builder()
                 .comanda(comanda)
                 .valor(comanda.getTotal())
@@ -191,14 +249,13 @@ public class ComandaService {
                 .build();
         recebimentoRepository.save(recebimento);
 
-        // 3. Libera a Mesa fisicamente
         mesa.setStatus(StatusMesa.DISPONIVEL);
         mesaRepository.save(mesa);
 
-        auditoriaService.registrarAcao(comanda, AcaoComanda.FECHADA, "Pagamento confirmado e mesa liberada.", usuarioCaixa);
+        comanda.setStatus(StatusComanda.FINALIZADA);
+        comandaRepository.save(comanda);
 
-        // No modelo novo, NÃO damos comanda.getItens().clear() nem resetamos o total.
-        // A comanda fica salva como ela foi. O "listarComandasAtivas" cuidará de não mostrá-la mais.
+        auditoriaService.registrarAcao(comanda, AcaoComanda.FECHADA, "Pagamento confirmado e mesa liberada.", usuarioCaixa);
     }
 
     // --- AUXILIARES ---

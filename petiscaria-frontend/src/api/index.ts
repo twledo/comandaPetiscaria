@@ -50,9 +50,12 @@ export const mesasApi = {
 };
 
 // ── Comandas ──────────────────────────────────────────────────────────────────
-export const comandasApi = {
-    abrir: (mesaId: number) =>
-        request<Comanda>(`/api/comandas/abrir/${mesaId}`, { method: 'POST' }),
+    export const comandasApi = {
+        abrir: (mesaId: number, nomeCliente: string) =>
+            request<Comanda>(
+                `/api/comandas/abrir/${mesaId}?nomeCliente=${encodeURIComponent(nomeCliente)}`,
+                { method: 'POST' }
+            ),
 
     adicionarItem: (
         comandaId: number,

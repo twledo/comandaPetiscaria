@@ -1,5 +1,6 @@
 package dev.petiscaria.comandas.controller.comanda;
 
+import dev.petiscaria.comandas.dto.pagamento.PagamentoItensDTO;
 import dev.petiscaria.comandas.models.comanda.Comanda;
 import dev.petiscaria.comandas.models.comanda.ItemPedido;
 import dev.petiscaria.comandas.service.comanda.ComandaService;
@@ -27,8 +28,11 @@ public class ComandaController {
 
     @PostMapping("/abrir/{mesaId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
-    public ResponseEntity<Comanda> iniciarAtendimento(@PathVariable Long mesaId) {
-        return ResponseEntity.ok(comandaService.iniciarAtendimento(mesaId, getUsuarioLogado()));
+    public ResponseEntity<Comanda> iniciarAtendimento(
+            @PathVariable Long mesaId,
+            @RequestParam("nomeCliente") String nomeCliente
+    ) {
+        return ResponseEntity.ok(comandaService.iniciarAtendimento(mesaId, getUsuarioLogado(), nomeCliente));
     }
 
     @PostMapping("/{comandaId}/itens")
@@ -56,6 +60,15 @@ public class ComandaController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Comanda> reabrirComanda(@PathVariable Long id) {
         return ResponseEntity.ok(comandaService.reabrirAtendimento(id, getUsuarioLogado()));
+    }
+
+    @PostMapping("/{comandaId}/pagar-itens")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Comanda pagarItens(
+            @PathVariable Long comandaId,
+            @RequestBody PagamentoItensDTO dto
+    ) {
+        return comandaService.pagarItensEspecificos(comandaId, dto.itensIds(), dto.metodoPagamento());
     }
 
     @PostMapping("/{id}/recebimento")

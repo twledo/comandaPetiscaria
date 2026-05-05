@@ -1,5 +1,6 @@
 package dev.petiscaria.comandas.models.comanda;
 
+import dev.petiscaria.comandas.enuns.MetodoPagamento;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,6 +28,9 @@ public class ComandaRecebimento {
     private Comanda comanda;
 
     private BigDecimal valor;
+
+    @Enumerated(EnumType.STRING)
+    private MetodoPagamento metodoPagamento;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

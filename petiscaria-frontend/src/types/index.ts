@@ -1,5 +1,5 @@
 export type StatusMesa = 'DISPONIVEL' | 'OCUPADA' | 'AGUARDANDO_PAGAMENTO';
-export type CategoriaProduto = 'BEBIDA' | 'PORCAO' | 'PRATO' | 'SOBREMESA' | 'OUTROS';
+export type CategoriaProduto = 'ESPETINHOS' | 'PORCAO' | 'BEBIDAS' | 'OUTROS';
 export type UnidadeMedida = 'UNIDADE' | 'GRAMA' | 'ML' | 'LITRO';
 export type TipoUsuario = 'ADMIN' | 'GARCOM';
 
@@ -24,6 +24,7 @@ export interface ItemPedido {
 export interface Comanda {
     id: number;
     mesa: Mesa;
+    nomeCliente?: string;
     total: number;
     itens: ItemPedido[];
     createdAt: string;

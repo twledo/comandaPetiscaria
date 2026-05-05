@@ -1,8 +1,8 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.75); /* Escurecido para focar no modal */
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -34,7 +34,7 @@
 
 .title {
   font-size: 1.4rem;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Droid Sans',, sans-serif;
   margin-bottom: 0.3rem;
 }
 
@@ -78,7 +78,15 @@
 .badgeAmber  { background: var(--amber-dim);  color: var(--amber);  }
 
 /* Section */
-.section { display: flex; flex-direction: column; gap: 0.75rem; }
+.section {
+  background: var(--bg-2);
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
 .description { color: var(--text-2); font-size: 0.9rem; line-height: 1.5; }
 
 /* Buttons */
@@ -87,7 +95,7 @@
   border-radius: 10px;
   border: none;
   font-size: 0.95rem;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Droid Sans',, sans-serif;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -126,6 +134,52 @@
   border-bottom: 1px solid var(--border);
   font-weight: 600;
   font-size: 0.875rem;
+}
+
+.comandaInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Espaço entre Comanda #X e Cliente: Nome */
+  flex: 1;
+}
+
+.clienteNome {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.inputNome {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  /* Se var(--bg-2) for claro, use uma cor escura fixa ou var(--surface-2) */
+  background: var(--bg-2, #1a1a1a);
+  color: var(--text, #ffffff);
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  margin-bottom: 0.5rem;
+}
+
+.inputNome:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-dim);
+  background: var(--surface); /* Muda levemente ao focar */
+}
+
+.inputNome::placeholder {
+  color: var(--text-2);
+  opacity: 0.6;
+}
+
+/* Estilo visual para quando o botão está desabilitado (nome vazio) */
+.btnPrimary:disabled {
+  background: var(--bg-3);
+  color: var(--text-2);
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none !important;
 }
 
 .itensCount {
@@ -240,7 +294,7 @@
 }
 
 .totalValue {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Droid Sans',, sans-serif;
   font-size: 1.5rem;
   font-weight: 800;
   color: var(--accent);
@@ -271,4 +325,3 @@
   animation: spin 0.7s linear infinite;
   display: inline-block;
 }
-

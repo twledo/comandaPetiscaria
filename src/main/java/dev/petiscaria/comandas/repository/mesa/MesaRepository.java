@@ -9,5 +9,7 @@ import java.util.List;
 
 @Repository
 public interface MesaRepository extends JpaRepository<Mesa, Long> {
-    List<Mesa> findByStatus(StatusMesa status);
+    List<Mesa> findAllByOrderByNumeroAsc();
+
+    List<Mesa> findByStatusOrderByNumeroAsc(StatusMesa status);
 }

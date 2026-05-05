@@ -7,42 +7,52 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  DISPONIVEL: 'Disponível',
-  OCUPADA: 'Ocupada',
-  AGUARDANDO_PAGAMENTO: 'Aguard. Pgto',
+  DISPONIVEL: 'DISPONÍVEL',
+  OCUPADA: 'OCUPADA',
+  AGUARDANDO_PAGAMENTO: 'AGUARD. PGTO',
 };
 
 export default function MesaCard({ mesa, onClick }: Props) {
-  const status = mesa.status.toLowerCase().replace('_', '-');
-  const total = mesa.comandaAtiva?.total;
+  const statusClass = mesa.status.toLowerCase().replace('_', '-');
+  const comanda = mesa.comandaAtiva;
+
+  // Tratativa para o total (lidando com o objeto complexo que vimos no JSON)
+  const valorTotal = typeof comanda?.total === 'object'
+      ? comanda.total.parsedValue
+      : comanda?.total;
 
   return (
-    <button
-      className={`${styles.card} ${styles[status]} animate-fade`}
-      onClick={() => onClick(mesa)}
-    >
-      <div className={styles.header}>
-        <span className={styles.dot} />
-        <span className={styles.statusLabel}>{STATUS_LABELS[mesa.status]}</span>
-      </div>
+      <button
+          className={`${styles.card} ${styles[statusClass]} animate-fade`}
+          onClick={() => onClick(mesa)}
+      >
+        <div className={styles.header}>
+          <div className={styles.statusGroup}>
+            <span className={styles.dot} />
+            <span className={styles.statusLabel}>{STATUS_LABELS[mesa.status]}</span>
+          </div>
 
-      <div className={styles.numero}>{mesa.numero}</div>
-
-      {total !== undefined && total !== null && (
-        <div className={styles.total}>
-          R$ {Number(total).toFixed(2).replace('.', ',')}
+          {/* EXIBIÇÃO DO NOME DO CLIENTE NO TOPO DO CARD */}
+          {comanda?.nomeCliente && (
+              <span className={styles.clienteNome} title={comanda.nomeCliente}>
+                {comanda.nomeCliente.toUpperCase()}
+          </span>
+          )}
         </div>
-      )}
 
-      {mesa.status === 'DISPONIVEL' && (
-        <div className={styles.action}>Iniciar →</div>
-      )}
-      {mesa.status === 'OCUPADA' && (
-        <div className={styles.action}>Lançar item →</div>
-      )}
-      {mesa.status === 'AGUARDANDO_PAGAMENTO' && (
-        <div className={styles.action}>Ver conta →</div>
-      )}
-    </button>
+        <div className={styles.numero}>{mesa.numero}</div>
+
+        {valorTotal !== undefined && valorTotal !== null && (
+            <div className={styles.total}>
+              R$ {Number(valorTotal).toFixed(2).replace('.', ',')}
+            </div>
+        )}
+
+        <div className={styles.action}>
+          {mesa.status === 'DISPONIVEL' && 'Iniciar →'}
+          {mesa.status === 'OCUPADA' && 'Lançar item →'}
+          {mesa.status === 'AGUARDANDO_PAGAMENTO' && 'Ver conta →'}
+        </div>
+      </button>
   );
 }

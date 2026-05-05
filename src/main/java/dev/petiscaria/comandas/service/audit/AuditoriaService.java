@@ -41,7 +41,7 @@ public class AuditoriaService {
                         .produtoId(item.getProduto().getId())
                         .nomeProduto(item.getNomeProduto())
                         .quantidade(item.getQuantidade())
-                        .precoVendido(item.getPrecoEfetivo())
+                        .precoVendido(item.getTotalItem())
                         .subtotal(item.getTotalItem())
                         .build())
                 .collect(Collectors.toList());

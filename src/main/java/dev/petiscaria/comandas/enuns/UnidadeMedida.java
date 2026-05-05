@@ -1,5 +1,6 @@
 package dev.petiscaria.comandas.enuns;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
@@ -21,5 +22,15 @@ public enum UnidadeMedida {
     @JsonValue
     public String getSigla() {
         return sigla;
+    }
+
+    @JsonCreator
+    public static UnidadeMedida fromSigla(String sigla) {
+        for (UnidadeMedida u : values()) {
+            if (u.sigla.equalsIgnoreCase(sigla)) {
+                return u;
+            }
+        }
+        throw new IllegalArgumentException("Unidade inválida: " + sigla);
     }
 }

@@ -1,5 +1,6 @@
 package dev.petiscaria.comandas.models.mesa;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import dev.petiscaria.comandas.enuns.StatusMesa;
 import dev.petiscaria.comandas.models.comanda.Comanda;
 import jakarta.persistence.*;
@@ -19,5 +20,6 @@ public class Mesa {
     private StatusMesa status;
 
     @Transient // Não cria coluna no banco
+    @JsonIgnoreProperties("mesa") // Impede que a comanda tente serializar a mesa de volta
     private Comanda comandaAtiva;
 }
