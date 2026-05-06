@@ -137,7 +137,7 @@
 **Verificar:**
 - ✅ Comanda desaparece da lista
 - ✅ "Total em Aberto" diminui
-- ✅ Toast "Comanda fechada!" aparece
+- ✅ Toast "Comanda CONTA_PEDIDA!" aparece
 -  ✅ Na AtendimentoPage, mesa volta para "Livre"
 
 ---
@@ -348,7 +348,7 @@ curl -X POST http://localhost:8080/api/comandas/42/itens \
 ### Fechar Comanda
 ```bash
 curl -X PATCH http://localhost:8080/api/comandas/42/fechar
-# Retorna comanda com status: "FECHADA"
+# Retorna comanda com status: "CONTA_PEDIDA"
 ```
 
 ---

@@ -4,6 +4,8 @@ public enum AcaoComanda {
     ABERTA,
     ITEM_ADICIONADO,
     ITEM_REMOVIDO,
-    FECHADA,
-    REABERTA
+    REABERTA,
+    CONTA_PEDIDA, // Conta foi pedida
+    PAGAMENTO_PARCIAL,
+    PAGA
 }

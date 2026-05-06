@@ -22,18 +22,29 @@ public class Venda {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // IDs originais para rastreabilidade técnica
     private Long mesaId;
     private Long comandaOriginalId;
 
+    // --- Dados Denormalizados (Snapshot) ---
+    // Importante: Guardamos o número e nome para que o relatório
+    // permaneça íntegro mesmo se a mesa for excluída ou o cliente mudar de nome.
+    private Long numeroMesa;
+    private String nomeCliente;
+
     private BigDecimal totalVenda;
 
+    // --- Controle Temporal ---
+    private LocalDateTime dataAbertura; // Vindo da Comanda.createdAt
+
     @CreationTimestamp
+    @Column(name = "data_fechamento")
     private LocalDateTime dataVenda;
 
     private String usuarioCaixa;
 
-    // Relacionamento com os itens que foram consumidos
-    @OneToMany(cascade = CascadeType.ALL)
-    @JoinColumn(name = "venda_id")
+    // Relacionamento com itens consumidos
+    // orphanRemoval = true garante que ao limpar a lista, os itens sejam deletados do banco
+    @OneToMany(mappedBy = "venda", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<VendaItem> itensConsumidos;
 }

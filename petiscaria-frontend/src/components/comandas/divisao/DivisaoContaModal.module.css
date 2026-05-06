@@ -1,0 +1,685 @@
+/* ==========================================================================
+   OVERLAY & MODAL
+   ========================================================================== */
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200; /* Igual ao seu .backdrop */
+    padding: 1rem;
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(16px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* ==========================================================================
+   HEADER
+   ========================================================================== */
+.header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 1.25rem 1.25rem 1rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.headerInfo {
+    display: flex;
+    flex-direction: column;
+}
+
+.title {
+    font-size: 1.3rem;
+    font-family: 'Droid Sans', sans-serif;
+    color: var(--text);
+    font-weight: 600;
+    margin: 0;
+}
+
+.subtitle {
+    font-size: 0.8rem;
+    color: var(--text-2);
+    margin-top: 0.2rem;
+}
+
+.closeBtn {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-2);
+    font-size: 0.8rem;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.closeBtn:hover {
+    background: var(--bg-3);
+    color: var(--text);
+}
+
+/* ==========================================================================
+   TOTAL BAR & TABS
+   ========================================================================== */
+.totalBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.totalLabel {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.totalValue {
+    color: var(--text);
+}
+
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem 0;
+    background: var(--surface);
+    flex-shrink: 0;
+}
+
+.tab {
+    flex: 1;
+    padding: 0.7rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-2);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    text-transform: uppercase;
+}
+
+.tab:hover {
+    background: var(--bg-3);
+    color: var(--text);
+}
+
+.tabActive {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.tabActive:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+/* ==========================================================================
+   BODY (ÁREA DE CONTEÚDO)
+   ========================================================================== */
+.body {
+    padding: 1rem 1.25rem 1.25rem;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.hint {
+    font-size: 0.75rem;
+    color: var(--text-2);
+    margin-bottom: 1rem;
+    line-height: 1.4;
+}
+
+/* ── ABA 1: ITENS ────────────────────────────────────────────────────────── */
+.itemsList {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.itemRow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-2);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.itemRowSelected {
+    border-color: var(--accent);
+}
+
+.checkBox {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--surface);
+    color: transparent;
+    font-size: 0.7rem;
+    transition: all 0.15s;
+}
+
+.checkBoxChecked {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.itemInfo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.itemName {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.itemQty {
+    font-size: 0.75rem;
+    color: var(--text-2);
+}
+
+.itemPrice {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Controles de Quantidade (+/-) na lista de itens */
+.qtdControls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-3);
+    border-radius: 8px;
+    padding: 0.25rem;
+}
+
+.qtdBtn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qtdNum {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 20px;
+    text-align: center;
+}
+
+.subtotalBox {
+    background: var(--bg-2);
+    border-radius: 10px;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid var(--border);
+    margin-bottom: 1rem;
+}
+
+.subtotalLabel {
+    font-size: 0.8rem;
+    color: var(--text-2);
+}
+
+.subtotalValue {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* ── ABA 2: IGUALITÁRIO ──────────────────────────────────────────────────── */
+/* Estilo do novo componente Stepper que criamos */
+.counterBox {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.counterLabel {
+    font-size: 0.85rem;
+    color: var(--text-2);
+}
+
+.bigCounter {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.counterBtn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-3);
+    color: var(--text);
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.counterBtn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.counterValue {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 30px;
+    text-align: center;
+}
+
+.resultCard {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Fallback caso ainda esteja usando os estilos originais da aba Igual */
+.eqControls { margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+.eqLabel { font-size: 0.85rem; color: var(--text-2); }
+.numericInput {
+    background: var(--bg-2); color: var(--text); border: 1px solid var(--border);
+    padding: 0.5rem; border-radius: 8px; width: 70px; text-align: center;
+}
+
+/* ── ABA 3: VALOR LIVRE ──────────────────────────────────────────────────── */
+.customRows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.customPersonRow {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* Corrige o fundo branco dos inputs */
+.personNameInput, .personAmountInput {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.65rem 0.75rem;
+    color: var(--text);
+    font-size: 0.85rem;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.personNameInput:focus, .personAmountInput:focus {
+    border-color: var(--accent);
+}
+
+.personNameInput {
+    flex: 2;
+}
+
+.personAmountInput {
+    flex: 1;
+    font-family: tabular-nums, monospace;
+    text-align: right;
+}
+
+/* Remove as setinhas nativas dos inputs de número */
+.personAmountInput::-webkit-outer-spin-button,
+.personAmountInput::-webkit-inner-spin-button,
+.numericInput::-webkit-outer-spin-button,
+.numericInput::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.removeBtn {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-2);
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.removeBtn:hover {
+    color: var(--red);
+    border-color: var(--red);
+}
+
+.addPersonBtn {
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--text-2);
+    padding: 0.75rem;
+    width: 100%;
+    cursor: pointer;
+    font-size: 0.8rem;
+    margin-bottom: 1rem;
+    transition: all 0.2s;
+}
+
+.addPersonBtn:hover {
+    border-color: var(--text);
+    color: var(--text);
+}
+
+.remainderBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--bg-2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+.remainderLabel {
+    color: var(--text-2);
+}
+
+.remainderValue {
+    font-weight: 700;
+    color: var(--text);
+}
+
+.remainderOk { color: var(--green); }
+.remainderOver { color: var(--red); }
+
+.meter {
+    height: 4px;
+    background: var(--bg-3);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.meterFill {
+    height: 100%;
+    background: var(--green);
+    transition: width 0.3s ease;
+}
+
+.meterOver {
+    background: var(--red);
+}
+
+/* ==========================================================================
+   METODOS DE PAGAMENTO E BOTÃO FINAL
+   ========================================================================== */
+.methodRow {
+    margin-top: auto;
+    margin-bottom: 1rem;
+}
+
+.methodLabel {
+    font-size: 0.8rem;
+    color: var(--text-2);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+/* Estilo para os botões do grid (Pix, Dinheiro, etc) */
+.metodoGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+}
+
+.metodoBtn {
+    padding: 0.65rem 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-2);
+    color: var(--text);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+}
+
+.metodoBtn:hover {
+    border-color: var(--accent);
+}
+
+.metodoActive {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: #fff !important;
+}
+
+/* Caso use o Select antigo */
+.methodSelect {
+    width: 100%;
+    background: var(--bg-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 0.75rem;
+    border-radius: 8px;
+    outline: none;
+}
+
+/* Botão Verde Principal */
+.confirmBtn {
+    width: 100%;
+    padding: 1rem;
+    background: var(--green);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-family: 'Droid Sans', sans-serif;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: opacity 0.2s;
+    margin-top: 0.5rem;
+}
+
+.confirmBtn:hover:not(:disabled) {
+    opacity: 0.88;
+}
+
+.confirmBtn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
+}
+
+/* ==========================================================================
+   RENDER PRICE (A formatação bonita do R$)
+   ========================================================================== */
+.currencyWrapper {
+    display: inline-flex;
+    align-items: baseline;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; /* Impede que o R$ separe do número */
+}
+
+.currencySymbol {
+    font-size: 0.7em;
+    font-weight: 600;
+    color: var(--text-2);
+    margin-right: 2px;
+}
+
+.currencyInteger {
+    font-size: 1em;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.currencyDecimal {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--text-2);
+}
+
+/* Destaca o preço quando a linha do item está selecionada */
+.itemRowSelected .currencyInteger {
+    color: var(--accent);
+}
+
+/* ==========================================================================
+   ESTADOS (LOADING / SUCCESS / ERROR)
+   ========================================================================== */
+.loadingOverlay, .successBox {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 1.25rem;
+    text-align: center;
+    gap: 1rem;
+}
+
+.spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+.loadingText {
+    color: var(--text-2);
+    font-size: 0.85rem;
+}
+
+.successIcon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--bg-2);
+    border: 2px solid var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: var(--green);
+}
+
+.successTitle {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.successSub {
+    font-size: 0.85rem;
+    color: var(--text-2);
+}
+
+.errorMsg {
+    color: var(--red);
+    font-size: 0.8rem;
+    text-align: center;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(255, 0, 0, 0.1);
+    border-radius: 8px;
+}

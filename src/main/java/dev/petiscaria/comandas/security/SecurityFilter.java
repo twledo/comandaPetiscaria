@@ -26,21 +26,29 @@ public class SecurityFilter extends OncePerRequestFilter {
         var token = recuperarToken(request);
 
         if (token != null) {
-            var decodedJWT = tokenService.validarToken(token);
+            try {
+                var decodedJWT = tokenService.validarToken(token);
 
-            if (decodedJWT != null) {
-                String username = decodedJWT.getSubject();
+                if (decodedJWT != null) {
+                    String username = decodedJWT.getSubject();
 
-                var usuario = usuarioRepository.findByUsername(username)
-                        .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                    var usuarioOpt = usuarioRepository.findByUsername(username);
 
-                var authentication = new UsernamePasswordAuthenticationToken(
-                        usuario,
-                        null,
-                        usuario.getAuthorities()
-                );
+                    if (usuarioOpt.isPresent()) {
+                        var usuario = usuarioOpt.get();
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                        var authentication = new UsernamePasswordAuthenticationToken(
+                                usuario,
+                                null,
+                                usuario.getAuthorities()
+                        );
+
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    }
+                }
+            } catch (Exception e) {
+                // NÃO quebra a request — só segue sem autenticação
+                SecurityContextHolder.clearContext();
             }
         }
 

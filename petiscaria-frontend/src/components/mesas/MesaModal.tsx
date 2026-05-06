@@ -3,6 +3,7 @@ import { comandasApi } from '../../api';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Mesa } from '../../types';
 import LancarItensModal from '../comandas/LancarItensModal';
+import DivisaoContaModal from '../comandas/divisao/DivisaoContaModal';
 import styles from './MesaModal.module.css';
 
 interface Props {
@@ -17,6 +18,10 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showLancar, setShowLancar] = useState(false);
+    const [showDivisao, setShowDivisao] = useState(false);
+
+    // ⚠️ comanda PRECISA ser declarada antes de qualquer early-return que a use
+    const comanda = mesa.comandaAtiva;
 
     async function exec(fn: () => Promise<unknown>) {
         setError('');
@@ -31,10 +36,10 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
         }
     }
 
-    if (showLancar && mesa.comandaAtiva) {
+    if (showLancar && comanda) {
         return (
             <LancarItensModal
-                comanda={mesa.comandaAtiva}
+                comanda={comanda}
                 mesa={mesa}
                 onClose={onClose}
                 onRefresh={onRefresh}
@@ -42,11 +47,23 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
         );
     }
 
-    const comanda = mesa.comandaAtiva;
+    if (showDivisao && comanda) {
+        return (
+            <DivisaoContaModal
+                comanda={comanda}
+                onClose={() => setShowDivisao(false)}
+                onSuccess={async () => {
+                    setShowDivisao(false);
+                    await onRefresh();
+                }}
+            />
+        );
+    }
 
     return (
         <div className={styles.backdrop} onClick={e => e.target === e.currentTarget && onClose()}>
             <div className={`${styles.modal} animate-scale`}>
+
                 {/* Header */}
                 <div className={styles.header}>
                     <div>
@@ -58,7 +75,8 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
 
                 {/* Body */}
                 <div className={styles.body}>
-                    {/* DISPONIVEL */}
+
+                    {/* ── DISPONIVEL ─────────────────────────────── */}
                     {mesa.status === 'DISPONIVEL' && (
                         <div className={styles.section}>
                             <div style={{ marginBottom: '0.5rem' }}>
@@ -71,9 +89,9 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
                                 className={styles.inputNome}
                                 placeholder="Ex: João Silva"
                                 value={nomeCliente}
-                                onChange={(e) => setNomeCliente(e.target.value)}
+                                onChange={e => setNomeCliente(e.target.value)}
                                 disabled={loading}
-                                autoFocus // Foca automaticamente ao abrir
+                                autoFocus
                             />
 
                             <button
@@ -86,7 +104,7 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
                         </div>
                     )}
 
-                    {/* OCUPADA */}
+                    {/* ── OCUPADA ────────────────────────────────── */}
                     {mesa.status === 'OCUPADA' && comanda && (
                         <>
                             <ComandaResumo comanda={comanda} />
@@ -110,7 +128,7 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
                         </>
                     )}
 
-                    {/* AGUARDANDO_PAGAMENTO */}
+                    {/* ── AGUARDANDO_PAGAMENTO ───────────────────── */}
                     {mesa.status === 'AGUARDANDO_PAGAMENTO' && comanda && (
                         <>
                             <ComandaResumo comanda={comanda} />
@@ -118,36 +136,42 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
                             <div className={styles.totalBox}>
                                 <span>Total a Receber</span>
                                 <span className={styles.totalValue}>
-                  R$ {Number(comanda.total).toFixed(2).replace('.', ',')}
-                </span>
+                                    R$ {Number(comanda.total).toFixed(2).replace('.', ',')}
+                                </span>
                             </div>
 
-                            <div className={styles.actions}>
-                                {isAdmin && (
-                                    <>
-                                        <button
-                                            className={`${styles.btn} ${styles.btnGreen}`}
-                                            onClick={() => exec(() => comandasApi.finalizar(comanda.id))}
-                                            disabled={loading}
-                                        >
-                                            {loading ? <Spinner /> : '💰 Confirmar Pagamento'}
-                                        </button>
+                            {isAdmin ? (
+                                <div className={styles.actions}>
+                                    {/* Dividir conta — botão secundário, largura total */}
+                                    <button
+                                        className={`${styles.btn} ${styles.btnGhost}`}
+                                        onClick={() => setShowDivisao(true)}
+                                        disabled={loading}
+                                    >
+                                        ÷ Dividir Conta
+                                    </button>
 
-                                        <button
-                                            className={`${styles.btn} ${styles.btnGhost}`}
-                                            onClick={() => exec(() => comandasApi.reabrir(comanda.id))}
-                                            disabled={loading}
-                                        >
-                                            ↩ Reabrir Comanda
-                                        </button>
-                                    </>
-                                )}
-                                {!isAdmin && (
-                                    <p className={styles.waitMsg}>
-                                        Aguardando confirmação do administrador.
-                                    </p>
-                                )}
-                            </div>
+                                    <button
+                                        className={`${styles.btn} ${styles.btnGreen}`}
+                                        onClick={() => exec(() => comandasApi.finalizar(comanda.id))}
+                                        disabled={loading}
+                                    >
+                                        {loading ? <Spinner /> : '💰 Confirmar Pagamento'}
+                                    </button>
+
+                                    <button
+                                        className={`${styles.btn} ${styles.btnGhost}`}
+                                        onClick={() => exec(() => comandasApi.reabrir(comanda.id))}
+                                        disabled={loading}
+                                    >
+                                        ↩ Reabrir Comanda
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className={styles.waitMsg}>
+                                    Aguardando confirmação do administrador.
+                                </p>
+                            )}
                         </>
                     )}
 
@@ -157,6 +181,8 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
         </div>
     );
 }
+
+// ─── Sub-componentes ──────────────────────────────────────────────────────────
 
 function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']> }) {
     const { isAdmin } = useAuth();
@@ -171,7 +197,7 @@ function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']>
             if (idx !== -1) comanda.itens.splice(idx, 1);
             forceUpdate(n => n + 1);
         } catch {
-            // silently ignore in this context
+            // silently ignore
         } finally {
             setEstornando(null);
         }
@@ -183,7 +209,9 @@ function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']>
                 <div className={styles.comandaInfo}>
                     <span className={styles.comandaId}>Itens da Comanda #{comanda.id}</span>
                     {comanda.nomeCliente && (
-                        <span className={styles.clienteNome}> - {comanda.nomeCliente.toUpperCase() || "NOME VAZIO (Contatar Thiago)"}</span>
+                        <span className={styles.clienteNome}>
+                            {' - '}{comanda.nomeCliente.toUpperCase()}
+                        </span>
                     )}
                 </div>
                 <span className={styles.itensCount}>{comanda.itens.length} itens</span>
@@ -196,16 +224,16 @@ function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']>
                     {comanda.itens.map(item => (
                         <li key={item.id} className={styles.itemRow}>
                             <div className={styles.itemInfo}>
-                <span className={styles.itemNome}>
-                  {item.nomeProduto}
-                    {item.meiaPorcao && <span className={styles.meiaTag}>½</span>}
-                </span>
+                                <span className={styles.itemNome}>
+                                    {item.nomeProduto}
+                                    {item.meiaPorcao && <span className={styles.meiaTag}>½</span>}
+                                </span>
                                 <span className={styles.itemQtd}>x{item.quantidade}</span>
                             </div>
                             <div className={styles.itemRight}>
-                <span className={styles.itemTotal}>
-                  R$ {Number(item.totalItem).toFixed(2).replace('.', ',')}
-                </span>
+                                <span className={styles.itemTotal}>
+                                    R$ {Number(item.totalItem).toFixed(2).replace('.', ',')}
+                                </span>
                                 {isAdmin && (
                                     <button
                                         className={styles.estornoBtn}
@@ -232,9 +260,9 @@ function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']>
 
 function StatusBadge({ status }: { status: string }) {
     const map: Record<string, { label: string; cls: string }> = {
-        DISPONIVEL: { label: 'Disponível', cls: styles.badgeGreen },
-        OCUPADA: { label: 'Ocupada', cls: styles.badgeOrange },
-        AGUARDANDO_PAGAMENTO: { label: 'Aguard. Pagamento', cls: styles.badgeAmber },
+        DISPONIVEL:          { label: 'Disponível',       cls: styles.badgeGreen  },
+        OCUPADA:             { label: 'Ocupada',          cls: styles.badgeOrange },
+        AGUARDANDO_PAGAMENTO:{ label: 'Aguard. Pagamento',cls: styles.badgeAmber  },
     };
     const { label, cls } = map[status] ?? { label: status, cls: '' };
     return <span className={`${styles.badge} ${cls}`}>{label}</span>;

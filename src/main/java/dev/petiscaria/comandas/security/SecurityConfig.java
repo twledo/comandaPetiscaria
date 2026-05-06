@@ -58,7 +58,7 @@ public class SecurityConfig {
                     req.requestMatchers("/ws-petiscaria/**").permitAll();
 
                     req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/login").permitAll();
-                    req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/registrar").permitAll();
+                    req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/registrar").hasRole(TipoUsuario.ADMIN.name());
 
                     req.requestMatchers("/api/usuarios/registrar").hasRole(TipoUsuario.ADMIN.name());
                     req.requestMatchers("/api/produtos/**").hasRole(TipoUsuario.ADMIN.name());

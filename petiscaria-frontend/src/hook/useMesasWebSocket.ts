@@ -13,7 +13,7 @@ export function useMesasWebSocket(onMessageReceived: (data: any) => void) {
         const stompClient = Stomp.over(socket);
 
         // Desativa o log de debug no console (opcional)
-        stompClient.debug = () => {};
+        stompClient.debug = () => {}
 
         const headers = {
             Authorization: `Bearer ${user?.token}`

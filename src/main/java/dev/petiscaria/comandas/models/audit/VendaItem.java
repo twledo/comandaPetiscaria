@@ -1,5 +1,6 @@
 package dev.petiscaria.comandas.models.audit;
 
+import dev.petiscaria.comandas.enuns.CategoriaProduto;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,9 +20,29 @@ public class VendaItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "venda_id")
+    private Venda venda;
+
     private Long produtoId;
+
+    // Salvar o nome evita que o relatório fique vazio se o produto for excluído
     private String nomeProduto;
+
+    // No seu VendaItem.java
+    @Enumerated(EnumType.STRING) // Ou apenas String se preferir desnormalizar
+    private CategoriaProduto categoria;
+
     private Long quantidade;
-    private BigDecimal precoVendido; // Preço unitário final com descontos/meia-porção
+
+    // O preço real do cadastro no momento da venda
+    private BigDecimal precoTabela;
+
+    // O preço que saiu para o cliente (ex: se era 20.00 e foi meia-porção, aqui fica 12.00)
+    private BigDecimal precoVendido;
+
     private BigDecimal subtotal;
+
+    // Gravar se foi meia porção ajuda a entender o comportamento de consumo
+    private boolean meiaPorcao;
 }

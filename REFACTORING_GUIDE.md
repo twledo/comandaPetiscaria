@@ -304,7 +304,7 @@ export interface CartItem {
 3. Clica "Receber" em uma comanda
    ↓
 4. PATCH /api/comandas/{id}/fechar
-   ↓ (backend muda status para FECHADA)
+   ↓ (backend muda status para CONTA_PEDIDA)
    ↓
 5. Comanda desaparece da lista
    ↓
@@ -444,7 +444,7 @@ PATCH  /api/produtos/{id}/estoque            → Toggle disponibilidade
 1. Acesse AdminPage → Aba "Caixa"
 2. Veja lista de comandas abertas
 3. Clique "Receber" ao lado do total
-4. Comanda é fechada e desaparece da lista
+4. Comanda é CONTA_PEDIDA e desaparece da lista
 ```
 
 ---

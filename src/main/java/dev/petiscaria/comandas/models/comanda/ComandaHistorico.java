@@ -1,6 +1,7 @@
 package dev.petiscaria.comandas.models.comanda;
 
 import dev.petiscaria.comandas.enuns.AcaoComanda;
+import dev.petiscaria.comandas.enuns.MetodoPagamento;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,4 +40,16 @@ public class ComandaHistorico {
 
     // NOVO: Valor da comanda no exato momento da ação
     private BigDecimal valorMomento;
+
+    // O "Delta": Quanto essa ação específica movimentou? (Ex: 35.00 do pagamento ou do item)
+    private BigDecimal valorOperacao;
+
+    // Se for uma ação de ITEM (Adicionado/Removido), estruturamos aqui
+    private Long produtoId;
+    private String nomeProduto;
+    private Integer quantidade;
+
+    // Se for uma ação de PAGAMENTO, estruturamos aqui
+    @Enumerated(EnumType.STRING)
+    private MetodoPagamento metodoPagamento;
 }

@@ -1,4 +1,4 @@
-import type { AuthUser, Comanda, LoginResponse, Mesa, PageResponse, Produto } from '../types';
+import type {AuthUser, Comanda, LoginResponse, Mesa, PageResponse, Produto} from '../types';
 
 const BASE_URL = 'http://192.168.100.184:8080';
 
@@ -20,10 +20,10 @@ async function request<T>(
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(options.headers as Record<string, string>),
-};
+    };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+    const res = await fetch(`${BASE_URL}${path}`, {...options, headers});
     if (!res.ok) {
         const text = await res.text().catch(() => 'Erro desconhecido');
         throw new Error(text || `HTTP ${res.status}`);
@@ -39,7 +39,7 @@ export const authApi = {
     login: (username: string, senha: string) =>
         request<LoginResponse>('/api/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ username, senha }),
+            body: JSON.stringify({username, senha}),
         }),
 };
 
@@ -50,12 +50,12 @@ export const mesasApi = {
 };
 
 // ── Comandas ──────────────────────────────────────────────────────────────────
-    export const comandasApi = {
-        abrir: (mesaId: number, nomeCliente: string) =>
-            request<Comanda>(
-                `/api/comandas/abrir/${mesaId}?nomeCliente=${encodeURIComponent(nomeCliente)}`,
-                { method: 'POST' }
-            ),
+export const comandasApi = {
+    abrir: (mesaId: number, nomeCliente: string) =>
+        request<Comanda>(
+            `/api/comandas/abrir/${mesaId}?nomeCliente=${encodeURIComponent(nomeCliente)}`,
+            {method: 'POST'}
+        ),
 
     adicionarItem: (
         comandaId: number,
@@ -73,13 +73,28 @@ export const mesasApi = {
         }),
 
     fechar: (comandaId: number) =>
-        request<Comanda>(`/api/comandas/${comandaId}/fechar`, { method: 'PATCH' }),
+        request<Comanda>(`/api/comandas/${comandaId}/fechar`, {method: 'PATCH'}),
 
     reabrir: (comandaId: number) =>
-        request<Comanda>(`/api/comandas/${comandaId}/reabrir`, { method: 'PATCH' }),
+        request<Comanda>(`/api/comandas/${comandaId}/reabrir`, {method: 'PATCH'}),
 
     finalizar: (comandaId: number) =>
-        request<void>(`/api/comandas/${comandaId}/recebimento`, { method: 'POST' }),
+        request<void>(`/api/comandas/${comandaId}/recebimento`, {method: 'POST'}),
+
+    pagarItens: (comandaId: number, dados: {
+        itens: Array<{ itemId: number; quantidadePagar: number }>;
+        metodoPagamento: string
+    }) =>
+        request<Comanda>(`/api/comandas/${comandaId}/pagar-itens`, {
+            method: 'POST',
+            body: JSON.stringify(dados),
+        }),
+
+    dividirConta: (comandaId: number, dados: any) =>
+        request<Comanda>(`/api/comandas/${comandaId}/dividir-conta`, {
+            method: 'POST',
+            body: JSON.stringify(dados),
+        }),
 };
 
 // ── Produtos ──────────────────────────────────────────────────────────────────
@@ -113,5 +128,5 @@ export const produtosApi = {
         }),
 
     alternarEstoque: (id: number) =>
-        request<Produto>(`/api/produtos/${id}/estoque`, { method: 'PATCH' }),
+        request<Produto>(`/api/produtos/${id}/estoque`, {method: 'PATCH'}),
 };

@@ -1,5 +1,7 @@
 package dev.petiscaria.comandas.service.comanda;
 
+import dev.petiscaria.comandas.dto.pagamento.PagamentoItensDTO;
+import dev.petiscaria.comandas.dto.pagamento.PagamentoParcialDTO;
 import dev.petiscaria.comandas.enuns.AcaoComanda;
 import dev.petiscaria.comandas.enuns.MetodoPagamento;
 import dev.petiscaria.comandas.enuns.StatusComanda;
@@ -23,7 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -41,6 +45,10 @@ public class ComandaService {
     private final AuditoriaService auditoriaService;
     private final SimpMessagingTemplate messagingTemplate;
 
+    // ─────────────────────────────────────────────────────────────────
+    // FLUXO PRINCIPAL
+    // ─────────────────────────────────────────────────────────────────
+
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
     public Comanda iniciarAtendimento(Long mesaId, String usuario, String nomeCliente) {
@@ -57,20 +65,14 @@ public class ComandaService {
         Mesa mesa = mesaRepository.findById(mesaId)
                 .orElseThrow(() -> new RuntimeException("Mesa não encontrada."));
 
-        // Se a mesa já está OCUPADA, precisamos achar a comanda que está "segurando" ela
         if (mesa.getStatus() == StatusMesa.OCUPADA) {
-            // Mudamos para buscar uma LISTA para evitar o erro de 'NonUniqueResult'
             List<Comanda> comandasAtivas = comandaRepository.findByMesaIdAtiva(mesa.getId());
-
             if (comandasAtivas.isEmpty()) {
                 throw new RuntimeException("Mesa ocupada mas comanda não encontrada.");
             }
-
-            // Retornamos a mais recente (assumindo que a lista vem ordenada ou pegando a primeira)
             return comandasAtivas.get(0);
         }
 
-        // 1. Atualiza o status físico da Mesa
         mesa.setStatus(StatusMesa.OCUPADA);
         mesaRepository.save(mesa);
 
@@ -82,7 +84,9 @@ public class ComandaService {
                 .build();
 
         comanda = comandaRepository.saveAndFlush(comanda);
-        auditoriaService.registrarAcao(comanda, AcaoComanda.ABERTA, "Atendimento iniciado na mesa " + mesa.getNumero(), usuario);
+
+        String detalheLog = String.format("Abertura de comanda: Mesa %s ocupada pelo cliente '%s'.", mesa.getNumero(), nomeCliente);
+        auditoriaService.registrarAcao(comanda, AcaoComanda.ABERTA, detalheLog, usuario);
 
         notificarMudancaMesas();
         return comanda;
@@ -114,8 +118,24 @@ public class ComandaService {
                 );
 
         atualizarSaldoTotal(comanda);
-        auditoriaService.registrarAcao(comanda, AcaoComanda.ITEM_ADICIONADO,
-                String.format("Lançado: %s x%d", produto.getNome(), dadosItem.getQuantidade()), usuario);
+
+        String detalheLog = String.format("Lançamento: %d un. de '%s' %s(R$ %.2f/un). Incremento total: R$ %.2f.",
+                dadosItem.getQuantidade(),
+                produto.getNome(),
+                dadosItem.isMeiaPorcao() ? "[Meia Porção] " : "",
+                dadosItem.getPrecoUnitario(),
+                dadosItem.getTotalItem());
+
+        auditoriaService.registrarAcaoItem(
+                comanda,
+                AcaoComanda.ITEM_ADICIONADO,
+                detalheLog,
+                usuario,
+                produto.getId(),
+                produto.getNome(),
+                dadosItem.getQuantidade().intValue(), // Converte Long para Integer se necessário
+                dadosItem.getTotalItem() // O valor da operação
+        );
 
         notificarMudancaMesas();
         return comandaRepository.save(comanda);
@@ -125,7 +145,6 @@ public class ComandaService {
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
     public Comanda estornarItem(Long comandaId, Long itemId, String usuario) {
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
-
         garantirMesaOcupada(comanda.getMesa());
 
         ItemPedido itemParaEstornar = comanda.getItens().stream()
@@ -133,9 +152,9 @@ public class ComandaService {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Item não encontrado nesta comanda."));
 
-        String detalheEstorno = String.format("ESTORNO: %s (Qtd: %d) - Valor: R$ %s",
-                itemParaEstornar.getNomeProduto(),
+        String detalheEstorno = String.format("Estorno realizado: Remoção total de %d un. de '%s'. Valor devolvido: R$ %.2f.",
                 itemParaEstornar.getQuantidade(),
+                itemParaEstornar.getNomeProduto(),
                 itemParaEstornar.getTotalItem());
 
         auditoriaService.registrarAcao(comanda, AcaoComanda.ITEM_REMOVIDO, detalheEstorno, usuario);
@@ -148,7 +167,7 @@ public class ComandaService {
     }
 
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')") // Geralmente restrito ao Admin/Gerente
+    @PreAuthorize("hasRole('ADMIN')")
     public Comanda reabrirAtendimento(Long comandaId, String usuario) {
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         Mesa mesa = comanda.getMesa();
@@ -161,12 +180,8 @@ public class ComandaService {
         mesa.setStatus(StatusMesa.OCUPADA);
         mesaRepository.save(mesa);
 
-        auditoriaService.registrarAcao(
-                comanda,
-                AcaoComanda.REABERTA,
-                "Atendimento reaberto para lançamento de novos itens.",
-                usuario
-        );
+        auditoriaService.registrarAcao(comanda, AcaoComanda.REABERTA,
+                "Atendimento reaberto: mesa retornou ao status de ocupada para novos lançamentos.", usuario);
 
         notificarMudancaMesas();
         return comanda;
@@ -182,59 +197,187 @@ public class ComandaService {
             throw new IllegalStateException("A mesa precisa estar ocupada para solicitar o fechamento.");
         }
 
-        // A Mesa passa a aguardar o financeiro
         mesa.setStatus(StatusMesa.AGUARDANDO_PAGAMENTO);
-        comanda.setStatus(StatusComanda.AGUARDANDO_PAGAMENTO); // Atualiza a comanda
+        comanda.setStatus(StatusComanda.AGUARDANDO_PAGAMENTO);
 
         mesaRepository.save(mesa);
-        auditoriaService.registrarAcao(comanda, AcaoComanda.FECHADA, "Pedido de conta realizado.", usuario);
 
+        String detalheLog = String.format("Conta solicitada pelo cliente. Valor total a conferir: R$ %.2f.", comanda.getTotal());
+
+        auditoriaService.registrarAcao(comanda, AcaoComanda.CONTA_PEDIDA, detalheLog, usuario);
+        
         notificarMudancaMesas();
         return comandaRepository.save(comanda);
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // PAGAMENTO — POR ITENS SELECIONADOS
+    // ─────────────────────────────────────────────────────────────────
+
     @Transactional
-    public Comanda pagarItensEspecificos(Long comandaId, List<Long> itensIds, MetodoPagamento metodo) {
+    @PreAuthorize("hasRole('ADMIN')")
+    public Comanda pagarItensEspecificos(Long comandaId,
+                                         List<PagamentoItensDTO.ItemSelecionado> itensSelecionados,
+                                         MetodoPagamento metodo,
+                                         String usuario) {
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
 
-        // 1. Filtrar os itens da comanda que foram selecionados no Front
-        List<ItemPedido> itensParaPagar = comanda.getItens().stream()
-                .filter(item -> itensIds.contains(item.getId()))
-                .toList();
-
-        if (itensParaPagar.isEmpty()) {
-            throw new RuntimeException("Nenhum item válido selecionado para pagamento.");
+        if (itensSelecionados == null || itensSelecionados.isEmpty()) {
+            throw new RuntimeException("Nenhum item selecionado para pagamento.");
         }
 
-        // 2. Calcular o valor total desse grupo de itens (usando sua regra de 60% se for meia)
-        BigDecimal totalPagoAgora = itensParaPagar.stream()
-                .map(ItemPedido::getTotalItem)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalPagoAgora = BigDecimal.ZERO;
+        List<String> detalhes = new ArrayList<>();
 
-        // 3. Registrar o Recebimento no Financeiro
+        for (PagamentoItensDTO.ItemSelecionado sel : itensSelecionados) {
+            ItemPedido item = comanda.getItens().stream()
+                    .filter(i -> i.getId().equals(sel.itemId()))
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("Item #" + sel.itemId() + " não encontrado na comanda."));
+
+            long qtdPagar = sel.quantidadePagar();
+            long qtdTotal = item.getQuantidade();
+
+            if (qtdPagar <= 0 || qtdPagar > qtdTotal) {
+                throw new IllegalArgumentException(
+                        String.format("Quantidade inválida para '%s': solicitado %d, disponível %d.",
+                                item.getNomeProduto(), qtdPagar, qtdTotal));
+            }
+
+            BigDecimal precoUnitEfetivo = item.isMeiaPorcao()
+                    ? item.getPrecoUnitario().multiply(new BigDecimal("0.6"))
+                    : item.getPrecoUnitario();
+
+            BigDecimal valorPago = precoUnitEfetivo.multiply(new BigDecimal(qtdPagar));
+            totalPagoAgora = totalPagoAgora.add(valorPago);
+            detalhes.add(String.format("%d un. de %s", qtdPagar, item.getNomeProduto()));
+
+            if (qtdPagar == qtdTotal) {
+                comanda.getItens().remove(item);
+            } else {
+                item.setQuantidade(qtdTotal - qtdPagar);
+            }
+        }
+
         ComandaRecebimento recebimento = ComandaRecebimento.builder()
                 .comanda(comanda)
                 .valor(totalPagoAgora)
                 .metodoPagamento(metodo)
                 .dataRecebimento(LocalDateTime.now())
+                .usuario(usuario)
+                .observacao("Pgto Itens: " + String.join(", ", detalhes))
                 .build();
         recebimentoRepository.save(recebimento);
 
-        // 4. Remover os itens da comanda ativa (eles já foram pagos)
-        comanda.getItens().removeAll(itensParaPagar);
-
-        // 5. Recalcular o saldo devedor da comanda
         atualizarSaldoTotal(comanda);
 
-        // 6. Se a comanda ficar vazia, fechar o atendimento automaticamente
-        if (comanda.getItens().isEmpty()) {
+        String detalheAuditoria = String.format("Pagamento Parcial (Itens): Abatimento de R$ %.2f via %s. Itens pagos: %s.",
+                totalPagoAgora, metodo.getDescricao(), String.join("; ", detalhes));
+
+        auditoriaService.registrarAcaoPagamento(
+                comanda,
+                AcaoComanda.PAGAMENTO_PARCIAL,
+                detalheAuditoria,
+                usuario,
+                totalPagoAgora, // Valor da operação
+                metodo // O enum (PIX, DINHEIRO, etc)
+        );
+
+        verificarEFinalizarSeZerada(comanda, usuario);
+
+        notificarMudancaMesas();
+        return comandaRepository.save(comanda);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // PAGAMENTO — DIVISÃO IGUALITÁRIA OU POR VALOR LIVRE
+    // ─────────────────────────────────────────────────────────────────
+
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public Comanda registrarDivisaoConta(Long comandaId, PagamentoParcialDTO dto, String usuario) {
+        Comanda comanda = buscarPorIdOuFalhar(comandaId);
+        List<ComandaRecebimento> novosRecebimentos = new ArrayList<>();
+        String detalheAuditoria = "";
+
+        switch (dto.modalidade()) {
+            case IGUALITARIO -> {
+                if (dto.numeroPessoas() == null || dto.numeroPessoas() < 2) {
+                    throw new IllegalArgumentException("Número de pessoas deve ser pelo menos 2.");
+                }
+                BigDecimal valorPorPessoa = comanda.getTotal()
+                        .divide(new BigDecimal(dto.numeroPessoas()), 2, RoundingMode.HALF_UP);
+
+                for (int i = 1; i <= dto.numeroPessoas(); i++) {
+                    novosRecebimentos.add(ComandaRecebimento.builder()
+                            .comanda(comanda)
+                            .valor(valorPorPessoa)
+                            .metodoPagamento(dto.metodoPagamento())
+                            .dataRecebimento(LocalDateTime.now())
+                            .usuario(usuario)
+                            .observacao(String.format("Divisão Igualitária — Pessoa %d de %d", i, dto.numeroPessoas()))
+                            .build());
+                }
+
+                detalheAuditoria = String.format("Pagamento Parcial (Divisão Igualitária): Total da comanda dividido para %d pessoas. Cada um pagou R$ %.2f via %s.",
+                        dto.numeroPessoas(), valorPorPessoa, dto.metodoPagamento().getDescricao());
+            }
+
+            case VALOR_LIVRE -> {
+                if (dto.parcelas() == null || dto.parcelas().isEmpty()) {
+                    throw new IllegalArgumentException("Informe pelo menos uma parcela para divisão por valor livre.");
+                }
+
+                BigDecimal somaInformada = dto.parcelas().stream()
+                        .map(PagamentoParcialDTO.ParcelaPessoa::valor)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                if (somaInformada.subtract(comanda.getTotal()).abs().compareTo(new BigDecimal("0.02")) > 0) {
+                    throw new IllegalArgumentException(
+                            String.format("A soma das parcelas (R$ %.2f) não corresponde ao total da comanda (R$ %.2f).",
+                                    somaInformada, comanda.getTotal()));
+                }
+
+                for (PagamentoParcialDTO.ParcelaPessoa parcela : dto.parcelas()) {
+                    novosRecebimentos.add(ComandaRecebimento.builder()
+                            .comanda(comanda)
+                            .valor(parcela.valor())
+                            .metodoPagamento(dto.metodoPagamento())
+                            .dataRecebimento(LocalDateTime.now())
+                            .usuario(usuario)
+                            .observacao(String.format("Divisão Livre — %s pagou R$ %.2f", parcela.nomePessoa(), parcela.valor()))
+                            .build());
+                }
+
+                detalheAuditoria = String.format("Pagamento Parcial (Valor Livre): Conta dividida entre %d pessoas, totalizando R$ %.2f pagos via %s.",
+                        dto.parcelas().size(), somaInformada, dto.metodoPagamento().getDescricao());
+            }
+        }
+
+        recebimentoRepository.saveAll(novosRecebimentos);
+        auditoriaService.registrarAcao(comanda, AcaoComanda.PAGAMENTO_PARCIAL, detalheAuditoria, usuario);
+
+        BigDecimal totalRecebido = recebimentoRepository.somarRecebimentosPorComanda(comandaId);
+
+        // Verifica se o total recebido já cobriu o total da comanda
+        if (totalRecebido.compareTo(comanda.getTotal()) >= 0) {
+            auditoriaService.salvarSnapshotVenda(comanda, usuario);
+
             comanda.setStatus(StatusComanda.FINALIZADA);
             comanda.getMesa().setStatus(StatusMesa.DISPONIVEL);
+            mesaRepository.save(comanda.getMesa());
+
+            String finalizacaoLog = String.format("Conclusão de Pagamentos Parciais: O valor total de R$ %.2f foi atingido. Comanda encerrada e mesa liberada.", comanda.getTotal());
+            auditoriaService.registrarAcao(comanda, AcaoComanda.PAGA, finalizacaoLog, usuario);
         }
 
         notificarMudancaMesas();
         return comandaRepository.save(comanda);
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // FINALIZAÇÃO TOTAL (caixa confirma pagamento integral)
+    // ─────────────────────────────────────────────────────────────────
 
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
@@ -251,7 +394,9 @@ public class ComandaService {
         ComandaRecebimento recebimento = ComandaRecebimento.builder()
                 .comanda(comanda)
                 .valor(comanda.getTotal())
+                // .metodoPagamento(MetodoPagamento.DINHEIRO) // Opcional: Adicione o recebimento via parâmetro no futuro
                 .usuario(usuarioCaixa)
+                .observacao("Pagamento Integral no Caixa")
                 .build();
         recebimentoRepository.save(recebimento);
 
@@ -261,11 +406,15 @@ public class ComandaService {
         comanda.setStatus(StatusComanda.FINALIZADA);
         comandaRepository.save(comanda);
 
-        auditoriaService.registrarAcao(comanda, AcaoComanda.FECHADA, "Pagamento confirmado e mesa liberada.", usuarioCaixa);
+        String detalheLog = String.format("Fechamento Integral: O valor de R$ %.2f foi pago em sua totalidade no caixa. Mesa liberada.", comanda.getTotal());
+        auditoriaService.registrarAcao(comanda, AcaoComanda.PAGA, detalheLog, usuarioCaixa);
+
         notificarMudancaMesas();
     }
 
-    // --- AUXILIARES ---
+    // ─────────────────────────────────────────────────────────────────
+    // AUXILIARES
+    // ─────────────────────────────────────────────────────────────────
 
     private void garantirMesaOcupada(Mesa mesa) {
         if (mesa.getStatus() == StatusMesa.DISPONIVEL) {
@@ -289,8 +438,21 @@ public class ComandaService {
     }
 
     private void notificarMudancaMesas() {
-        log.info("Enviando atualização de mesas via WebSocket para todos os dispositivos...");
+        log.info("Enviando atualização de mesas via WebSocket...");
         List<Mesa> listaAtualizada = mesaService.listarTodas();
         messagingTemplate.convertAndSend("/topic/mesas", listaAtualizada);
+    }
+
+    private void verificarEFinalizarSeZerada(Comanda comanda, String usuario) {
+        if (comanda.getItens().isEmpty()) {
+            auditoriaService.salvarSnapshotVenda(comanda, usuario);
+
+            comanda.setStatus(StatusComanda.FINALIZADA);
+            comanda.getMesa().setStatus(StatusMesa.DISPONIVEL);
+            mesaRepository.save(comanda.getMesa());
+
+            String detalheLog = "Conclusão Automática: Todos os itens da comanda foram pagos individualmente. Comanda zerada, encerrada e mesa liberada.";
+            auditoriaService.registrarAcao(comanda, AcaoComanda.PAGA, detalheLog, usuario);
+        }
     }
 }
