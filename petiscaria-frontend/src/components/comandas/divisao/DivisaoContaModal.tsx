@@ -184,7 +184,7 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
             setTimeout(() => {
                 onClose();
                 onSuccess(data);
-            }, 1000);
+            }, 0);
 
         } catch (e: any) {
             setEstado('error');
@@ -206,7 +206,7 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
             setTimeout(() => {
                 onClose();
                 onSuccess(data);
-            }, 1000);
+            }, 0);
 
         } catch (e: any) {
             setEstado('error');
