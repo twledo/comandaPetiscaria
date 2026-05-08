@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -56,14 +57,16 @@ public class AuditoriaService {
                                  BigDecimal valorOperacao, Long produtoId, String nomeProduto,
                                  Integer quantidade, MetodoPagamento metodoPagamento) {
 
+        BigDecimal valorMomento = comanda.getTotal() != null ? comanda.getTotal() : BigDecimal.ZERO;
+
         ComandaHistorico historico = ComandaHistorico.builder()
                 .comanda(comanda)
                 .acao(acao)
                 .detalhes(detalhes)
                 .usuario(usuario)
-                .valorMomento(comanda.getTotal())
+                .valorMomento(valorMomento)
                 .dataEvento(LocalDateTime.now())
-                // Novos campos estruturados para relatórios:
+                // Novos campos estruturados para relatórios BI:
                 .valorOperacao(valorOperacao)
                 .produtoId(produtoId)
                 .nomeProduto(nomeProduto)
@@ -72,30 +75,39 @@ public class AuditoriaService {
                 .build();
 
         historicoRepository.save(historico);
-        log.debug("Ação {} registrada estruturalmente para comanda {}", acao, comanda.getId());
+        log.debug("Ação {} registrada com sucesso para comanda {}", acao, comanda.getId());
     }
 
-    // ─── SNAPSHOT DE VENDA (Mantido intacto) ────────────────────────────────────
+    // ─── SNAPSHOT DE VENDA (Geração do Recibo Final) ────────────────────────────
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRED)
     public void salvarSnapshotVenda(Comanda comanda, String usuarioCaixa) {
-        log.info("Gerando snapshot de venda para a comanda {}", comanda.getId());
+        log.info("Gerando snapshot final de venda para a comanda {}", comanda.getId());
+
+        BigDecimal totalVenda = comanda.getTotal() != null ? comanda.getTotal() : BigDecimal.ZERO;
+        LocalDateTime dataAbertura = comanda.getCreatedAt() != null ? comanda.getCreatedAt() : LocalDateTime.now();
 
         Venda venda = Venda.builder()
                 .comandaOriginalId(comanda.getId())
                 .mesaId(comanda.getMesa().getId())
                 .numeroMesa(comanda.getMesa().getNumero())
                 .nomeCliente(comanda.getNomeCliente())
-                .totalVenda(comanda.getTotal())
+                .totalVenda(totalVenda)
                 .usuarioCaixa(usuarioCaixa)
-                .dataAbertura(comanda.getCreatedAt())
+                .dataAbertura(dataAbertura)
                 .dataVenda(LocalDateTime.now())
                 .build();
 
-        List<VendaItem> itensVenda = comanda.getItens().stream()
+        // Extrai os itens blindando contra listas nulas (Null-Safety)
+        List<VendaItem> itensVenda = Optional.ofNullable(comanda.getItens())
+                .orElse(List.of())
+                .stream()
                 .map(item -> {
-                    BigDecimal unitario = item.getQuantidade() > 0
-                            ? item.getTotalItem().divide(new BigDecimal(item.getQuantidade()), 2, RoundingMode.HALF_UP)
+                    BigDecimal totalItem = item.getTotalItem() != null ? item.getTotalItem() : BigDecimal.ZERO;
+
+                    // Previne divisão por zero caso a quantidade seja inválida no banco
+                    BigDecimal unitarioEfetivo = item.getQuantidade() > 0
+                            ? totalItem.divide(new BigDecimal(item.getQuantidade()), 2, RoundingMode.HALF_UP)
                             : BigDecimal.ZERO;
 
                     return VendaItem.builder()
@@ -104,8 +116,9 @@ public class AuditoriaService {
                             .nomeProduto(item.getNomeProduto())
                             .categoria(item.getProduto().getCategoria())
                             .quantidade(item.getQuantidade())
-                            .precoVendido(unitario)
-                            .subtotal(item.getTotalItem())
+                            .precoTabela(item.getProduto().getPreco())
+                            .precoVendido(unitarioEfetivo)
+                            .subtotal(totalItem)
                             .meiaPorcao(item.isMeiaPorcao())
                             .build();
                 })
@@ -113,5 +126,6 @@ public class AuditoriaService {
 
         venda.setItensConsumidos(itensVenda);
         vendaRepository.save(venda);
+        log.debug("Snapshot da venda salvo com {} itens.", itensVenda.size());
     }
 }

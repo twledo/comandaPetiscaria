@@ -20,34 +20,52 @@
 }
 
 .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 18px;
     width: 100%;
-    max-width: 480px;
-    max-height: 85vh;
+    max-width: 520px;
+    height: 760px;
+    background: var(--surface);
+    border-radius: 24px;
+    overflow: hidden;
+
     display: flex;
     flex-direction: column;
-    box-shadow: var(--shadow-lg);
-    overflow: hidden;
-    animation: slideUp 0.2s ease;
+
+    border: 1px solid var(--border);
+
+    box-shadow:
+            0 10px 30px rgba(0,0,0,.35),
+            0 0 0 1px rgba(255,255,255,.03);
+
+    animation: modalEnter .22s cubic-bezier(.2,.8,.2,1);
 }
 
-@keyframes slideUp {
-    from { transform: translateY(16px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+@keyframes modalEnter {
+    from {
+        opacity: 0;
+        transform:
+                translateY(24px)
+                scale(.97);
+    }
+
+    to {
+        opacity: 1;
+        transform:
+                translateY(0)
+                scale(1);
+    }
 }
 
 /* ==========================================================================
    HEADER
    ========================================================================== */
 .header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 1.25rem 1.25rem 1rem;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+
+    background: var(--surface);
+
+    backdrop-filter: blur(12px);
 }
 
 .headerInfo {
@@ -116,11 +134,9 @@
 }
 
 .tabs {
-    display: flex;
-    gap: 0.5rem;
-    padding: 1rem 1.25rem 0;
-    background: var(--surface);
-    flex-shrink: 0;
+    background: var(--bg-2);
+    padding: .35rem;
+    border-radius: 14px;
 }
 
 .tab {
@@ -146,11 +162,86 @@
     color: var(--text);
 }
 
-.tabActive {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
+.itemRow,
+.eqPersonCard,
+.personCard {
+    transition:
+            transform .18s ease,
+            border-color .18s ease,
+            background .18s ease;
 }
+
+.itemRow:hover,
+.eqPersonCard:hover,
+.personCard:hover {
+    transform: translateY(-1px);
+
+    border-color:
+            color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.personNameInput,
+.personAmountInput,
+.methodSelect,
+.numericInput {
+    height: 46px;
+
+    background:
+            color-mix(in srgb, var(--bg-2) 85%, black);
+
+    transition:
+            border-color .15s ease,
+            box-shadow .15s ease,
+            background .15s ease;
+}
+
+.personNameInput:focus,
+.personAmountInput:focus,
+.methodSelect:focus,
+.numericInput:focus {
+    border-color: var(--accent);
+
+    box-shadow:
+            0 0 0 4px
+            color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.successIcon {
+    animation:
+            successPop .45s cubic-bezier(.2,.8,.2,1);
+}
+
+@keyframes successPop {
+    0% {
+        transform: scale(.5);
+        opacity: 0;
+    }
+
+    70% {
+        transform: scale(1.08);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+}
+
+.tabActive {
+    background: var(--surface);
+
+    box-shadow:
+            0 2px 8px rgba(0,0,0,.12);
+}
+
 .tabActive:hover {
     background: var(--accent);
     color: #fff;
@@ -160,13 +251,16 @@
    BODY (ÁREA DE CONTEÚDO)
    ========================================================================== */
 .body {
-    padding: 1rem 1.25rem 1.25rem;
-    overflow-y: auto;
     flex: 1;
+    overflow-y: auto;
+
+    padding: 1rem 1.25rem;
+
     display: flex;
     flex-direction: column;
-}
 
+    min-height: 0;
+}
 .hint {
     font-size: 0.75rem;
     color: var(--text-2);
@@ -682,4 +776,32 @@
     padding: 0.5rem;
     background: rgba(255, 0, 0, 0.1);
     border-radius: 8px;
+}
+
+.footer {
+    position: sticky;
+    bottom: 0;
+
+    background: var(--surface);
+
+    padding-top: 1rem;
+
+    border-top: 1px solid var(--border);
+
+    margin-top: auto;
+}
+
+.progressBar {
+    height: 8px;
+    background: var(--bg-3);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progressFill {
+    height: 100%;
+    background: var(--accent);
+
+    transition:
+            width .35s cubic-bezier(.2,.8,.2,1);
 }

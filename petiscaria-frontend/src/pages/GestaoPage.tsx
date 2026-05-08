@@ -1,26 +1,22 @@
 import { useState, useEffect } from 'react';
-import { produtosApi } from "../api";
-import type { Produto, CategoriaProduto, UnidadeMedida } from '../types';
+import { produtosApi, dominiosApi } from "../api";
+import type { Opcao, Dominios } from "../api";
+import type { Produto } from '../types';
 import styles from './GestaoPage.module.css';
 
-const CATEGORIAS: CategoriaProduto[] = ['BEBIDA', 'PORCAO', 'PRATO', 'SOBREMESA', 'OUTROS'];
-const UNIDADES: UnidadeMedida[] = ['UNIDADE', 'GRAMA', 'ML', 'LITRO'];
-const CAT_LABELS: Record<string, string> = {
-    BEBIDA: 'Bebida', PORCAO: 'Porção', PRATO: 'Prato', SOBREMESA: 'Sobremesa', OUTROS: 'Outros',
-};
-
 const EMPTY: Omit<Produto, 'id'> = {
-    nome: '', preco: 0, categoria: 'PORCAO', descricao: '',
-    permiteMeia: false, disponivel: true, unidadeMedida: 'UNIDADE', quantidadePorUnidade: 1,
+    nome: '', preco: 0, categoria: '', descricao: '',
+    permiteMeia: false, disponivel: true, unidadeMedida: '', quantidadePorUnidade: 1,
 };
 
 export default function GestaoPage() {
     const [produtos, setProdutos] = useState<Produto[]>([]);
+    const [dominios, setDominios] = useState<Dominios | null>(null); // <-- TUDO DINÂMICO
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState<Produto | null>(null);
     const [busca, setBusca] = useState('');
-    const [catFiltro, setCatFiltro] = useState<CategoriaProduto | 'TODAS'>('TODAS');
+    const [catFiltro, setCatFiltro] = useState<string | number | 'TODAS'>('TODAS');
 
     async function load() {
         try {
@@ -31,7 +27,10 @@ export default function GestaoPage() {
         }
     }
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        dominiosApi.buscarTodos().then(setDominios).catch(console.error);
+        load();
+    }, []);
 
     async function toggleEstoque(id: number) {
         const updated = await produtosApi.alternarEstoque(id);
@@ -44,9 +43,12 @@ export default function GestaoPage() {
         return matchBusca && matchCat;
     });
 
+    const getCatLabel = (valorDaCategoria: any) => {
+        return dominios?.categorias.find(c => c.value === valorDaCategoria)?.label || valorDaCategoria;
+    };
+
     return (
         <div className={styles.page}>
-            {/* Toolbar */}
             <div className={styles.toolbar}>
                 <input
                     value={busca}
@@ -56,13 +58,19 @@ export default function GestaoPage() {
                 />
 
                 <div className={styles.catFilters}>
-                    {(['TODAS', ...CATEGORIAS] as const).map(c => (
+                    <button
+                        className={`${styles.catBtn} ${catFiltro === 'TODAS' ? styles.active : ''}`}
+                        onClick={() => setCatFiltro('TODAS')}
+                    >
+                        Todas
+                    </button>
+                    {dominios?.categorias.map(c => (
                         <button
-                            key={c}
-                            className={`${styles.catBtn} ${catFiltro === c ? styles.active : ''}`}
-                            onClick={() => setCatFiltro(c)}
+                            key={c.value}
+                            className={`${styles.catBtn} ${catFiltro === c.value ? styles.active : ''}`}
+                            onClick={() => setCatFiltro(c.value)}
                         >
-                            {c === 'TODAS' ? 'Todos' : CAT_LABELS[c]}
+                            {c.label}
                         </button>
                     ))}
                 </div>
@@ -75,7 +83,6 @@ export default function GestaoPage() {
                 </button>
             </div>
 
-            {/* Table */}
             {loading ? (
                 <div className={styles.loading}><span className={styles.spinner} /> Carregando...</div>
             ) : (
@@ -98,22 +105,19 @@ export default function GestaoPage() {
                                     <span className={styles.produtoNome}>{p.nome}</span>
                                     {p.descricao && <span className={styles.produtoDesc}>{p.descricao}</span>}
                                 </td>
-                                <td><span className={styles.catTag}>{CAT_LABELS[p.categoria]}</span></td>
+                                <td><span className={styles.catTag}>{getCatLabel(p.categoria)}</span></td>
                                 <td className={styles.preco}>R$ {Number(p.preco).toFixed(2).replace('.', ',')}</td>
                                 <td>{p.permiteMeia ? '✓' : '–'}</td>
                                 <td>
                                     <button
                                         className={`${styles.statusToggle} ${p.disponivel ? styles.disponivel : styles.indisponivel}`}
-                                        onClick={() => toggleEstoque(p.id)}
+                                        onClick={() => toggleEstoque(p.id!)}
                                     >
                                         {p.disponivel ? 'Disponível' : 'Indisponível'}
                                     </button>
                                 </td>
                                 <td>
-                                    <button
-                                        className={styles.editBtn}
-                                        onClick={() => { setEditing(p); setShowModal(true); }}
-                                    >
+                                    <button className={styles.editBtn} onClick={() => { setEditing(p); setShowModal(true); }}>
                                         Editar
                                     </button>
                                 </td>
@@ -127,9 +131,10 @@ export default function GestaoPage() {
                 </div>
             )}
 
-            {showModal && (
+            {showModal && dominios && (
                 <ProdutoModal
                     produto={editing}
+                    dominios={dominios} // <-- PASSANDO OS DOMÍNIOS PRO MODAL
                     onClose={() => setShowModal(false)}
                     onSave={async () => { await load(); setShowModal(false); }}
                 />
@@ -140,11 +145,12 @@ export default function GestaoPage() {
 
 interface ProdutoModalProps {
     produto: Produto | null;
+    dominios: Dominios;
     onClose: () => void;
     onSave: () => Promise<void>;
 }
 
-function ProdutoModal({ produto, onClose, onSave }: ProdutoModalProps) {
+function ProdutoModal({ produto, dominios, onClose, onSave }: ProdutoModalProps) {
     const [form, setForm] = useState<Omit<Produto, 'id'>>(
         produto ? { ...produto } : { ...EMPTY }
     );
@@ -159,14 +165,14 @@ function ProdutoModal({ produto, onClose, onSave }: ProdutoModalProps) {
         setError('');
         setLoading(true);
         try {
-            if (produto) {
+            if (produto?.id) {
                 await produtosApi.atualizar(produto.id, form);
             } else {
                 await produtosApi.cadastrar(form);
             }
             await onSave();
-        } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : 'Erro ao salvar produto.');
+        } catch (e: any) {
+            setError(e.response?.data?.message || e.message || 'Erro ao salvar produto.');
         } finally {
             setLoading(false);
         }
@@ -200,15 +206,17 @@ function ProdutoModal({ produto, onClose, onSave }: ProdutoModalProps) {
 
                         <div className={styles.field}>
                             <label>Categoria *</label>
-                            <select value={form.categoria} onChange={e => set('categoria', e.target.value as CategoriaProduto)}>
-                                {CATEGORIAS.map(c => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
+                            <select value={form.categoria} onChange={e => set('categoria', e.target.value)}>
+                                <option value="">Selecione...</option>
+                                {dominios.categorias.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                             </select>
                         </div>
 
                         <div className={styles.field}>
                             <label>Unidade de Medida</label>
-                            <select value={form.unidadeMedida ?? ''} onChange={e => set('unidadeMedida', e.target.value as UnidadeMedida)}>
-                                {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                            <select value={form.unidadeMedida ?? ''} onChange={e => set('unidadeMedida', e.target.value)}>
+                                <option value="">Selecione...</option>
+                                {dominios.unidades.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
                             </select>
                         </div>
 
@@ -254,7 +262,6 @@ function ProdutoModal({ produto, onClose, onSave }: ProdutoModalProps) {
                             </label>
                         </div>
                     </div>
-
                     {error && <p className={styles.error}>{error}</p>}
                 </div>
 

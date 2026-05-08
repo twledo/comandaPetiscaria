@@ -1,19 +1,8 @@
-import {useState, useEffect} from 'react';
-import {produtosApi, comandasApi} from '../../api';
-import type {Comanda, Mesa, Produto, CategoriaProduto, CarrinhoItem} from '../../types';
+import { useState, useEffect } from 'react';
+import { produtosApi, comandasApi, dominiosApi } from '../../api';
+import type { Opcao } from '../../api'; // <-- Importando como TIPO
+import type { Comanda, Mesa, Produto, CarrinhoItem } from '../../types';
 import styles from './LancarItensModal.module.css';
-
-const CATEGORIAS: { label: string; value: number | '' }[] = [
-    {label: 'Todas', value: ''},
-    {label: 'Espetinhos', value: 1},
-    {label: 'Porções', value: 2},
-    {label: 'Bebidas', value: 3},
-    {label: 'Mini Pizza', value: 4},
-    {label: 'Lanches', value: 5},
-    {label: 'Acompanhamento', value: 6},
-    {label: 'Refeições', value: 7},
-    {label: 'Outros', value: 8},
-]
 
 interface Props {
     comanda: Comanda;
@@ -24,21 +13,27 @@ interface Props {
 
 export const TAXA_MEIA_PORCAO = 0.6;
 
-export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Props) {
+export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: Props) {
     const [produtos, setProdutos] = useState<Produto[]>([]);
+    const [categorias, setCategorias] = useState<Opcao[]>([]); // <-- STATE DINÂMICO
     const [busca, setBusca] = useState('');
-    const [categoria, setCategoria] = useState<number | ''>(''); // Agora aceita number
+    const [categoria, setCategoria] = useState<number | string>('');
     const [carrinho, setCarrinho] = useState<CarrinhoItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
+        // Busca as categorias do backend uma única vez
+        dominiosApi.buscarTodos().then(res => setCategorias(res.categorias)).catch(console.error);
+    }, []);
+
+    useEffect(() => {
         setLoading(true);
         produtosApi
             .buscarCardapio({
                 nome: busca || undefined,
-                categoria: categoria !== '' ? categoria : undefined, // Envia o ID
+                categoria: categoria !== '' ? String(categoria) : undefined,
                 size: 100
             })
             .then(r => setProdutos(r.content))
@@ -52,11 +47,11 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
             if (exist) {
                 return prev.map(i =>
                     i.produto.id === produto.id && i.meiaPorcao === meiaPorcao
-                        ? {...i, quantidade: i.quantidade + 1}
+                        ? { ...i, quantidade: i.quantidade + 1 }
                         : i
                 );
             }
-            return [...prev, {produto, quantidade: 1, meiaPorcao}];
+            return [...prev, { produto, quantidade: 1, meiaPorcao }];
         });
     }
 
@@ -65,7 +60,7 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
             prev
                 .map(i =>
                     i.produto.id === produtoId && i.meiaPorcao === meiaPorcao
-                        ? {...i, quantidade: i.quantidade - 1}
+                        ? { ...i, quantidade: i.quantidade - 1 }
                         : i
                 )
                 .filter(i => i.quantidade > 0)
@@ -81,6 +76,7 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
         if (carrinho.length === 0) return;
         setEnviando(true);
         setError('');
+
         try {
             for (const item of carrinho) {
                 await comandasApi.adicionarItem(comanda.id, item.produto.id, {
@@ -89,8 +85,9 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
                 });
             }
             await onRefresh();
-        } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : 'Erro ao lançar itens.');
+            onClose();
+        } catch (e: any) {
+            setError(e.response?.data?.message || e.message || 'Erro ao lançar itens.');
             setEnviando(false);
         }
     }
@@ -98,7 +95,6 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
     return (
         <div className={styles.backdrop} onClick={e => e.target === e.currentTarget && onClose()}>
             <div className={`${styles.modal} animate-scale`}>
-                {/* Header */}
                 <div className={styles.header}>
                     <div>
                         <h2 className={styles.title}>Lançar Itens</h2>
@@ -108,9 +104,7 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
                 </div>
 
                 <div className={styles.body}>
-                    {/* Left: Cardápio */}
                     <div className={styles.cardapioPanel}>
-                        {/* Search */}
                         <div className={styles.searchBar}>
                             <input
                                 value={busca}
@@ -120,9 +114,15 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
                             />
                         </div>
 
-                        {/* Category filters */}
+                        {/* FILTROS DINÂMICOS AQUI */}
                         <div className={styles.catFilters}>
-                            {CATEGORIAS.map(c => (
+                            <button
+                                className={`${styles.catBtn} ${categoria === '' ? styles.active : ''}`}
+                                onClick={() => setCategoria('')}
+                            >
+                                Todas
+                            </button>
+                            {categorias.map(c => (
                                 <button
                                     key={c.value}
                                     className={`${styles.catBtn} ${categoria === c.value ? styles.active : ''}`}
@@ -133,10 +133,9 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
                             ))}
                         </div>
 
-                        {/* Products */}
                         {loading ? (
                             <div className={styles.loadingState}>
-                                <span className={styles.spinner}/> Carregando...
+                                <span className={styles.spinner} /> Carregando...
                             </div>
                         ) : (
                             <div className={styles.produtosList}>
@@ -153,8 +152,8 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
                                                     <span className={styles.produtoDesc}>{produto.descricao}</span>
                                                 )}
                                                 <span className={styles.produtoPreco}>
-                          R$ {Number(produto.preco).toFixed(2).replace('.', ',')}
-                        </span>
+                                                    R$ {Number(produto.preco).toFixed(2).replace('.', ',')}
+                                                </span>
                                             </div>
 
                                             <div className={styles.produtoActions}>
@@ -185,7 +184,6 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
                         )}
                     </div>
 
-                    {/* Right: Carrinho */}
                     <div className={styles.carrinhoPanel}>
                         <div className={styles.carrinhoHeader}>
                             <span>Carrinho</span>
@@ -193,9 +191,7 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
                         </div>
 
                         {carrinho.length === 0 ? (
-                            <p className={styles.carrinhoEmpty}>
-                                Selecione itens ao lado.
-                            </p>
+                            <p className={styles.carrinhoEmpty}>Selecione itens ao lado.</p>
                         ) : (
                             <ul className={styles.carrinhoList}>
                                 {carrinho.map(item => (
@@ -208,19 +204,17 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
                                             <button
                                                 className={styles.controlBtn}
                                                 onClick={() => removeCarrinho(item.produto.id, item.meiaPorcao)}
-                                            >−
-                                            </button>
+                                            >−</button>
                                             <span>{item.quantidade}</span>
                                             <button
                                                 className={styles.controlBtn}
                                                 onClick={() => addCarrinho(item.produto, item.meiaPorcao)}
-                                            >+
-                                            </button>
+                                            >+</button>
                                         </div>
                                         <span className={styles.carrinhoItemTotal}>
-                      R$ {(Number(item.produto.preco) * (item.meiaPorcao ? TAXA_MEIA_PORCAO : 1) * item.quantidade)
+                                            R$ {(Number(item.produto.preco) * (item.meiaPorcao ? TAXA_MEIA_PORCAO : 1) * item.quantidade)
                                             .toFixed(2).replace('.', ',')}
-                    </span>
+                                        </span>
                                     </li>
                                 ))}
                             </ul>
@@ -232,16 +226,13 @@ export default function LancarItensModal({comanda, mesa, onClose, onRefresh}: Pr
                                     <span>Total</span>
                                     <span>R$ {totalCarrinho.toFixed(2).replace('.', ',')}</span>
                                 </div>
-
                                 {error && <p className={styles.error}>{error}</p>}
-
                                 <button
                                     className={styles.confirmarBtn}
                                     onClick={confirmar}
                                     disabled={enviando}
                                 >
-                                    {enviando ? <><span
-                                        className={styles.spinner}/> Enviando...</> : '✓ Confirmar Pedido'}
+                                    {enviando ? <><span className={styles.spinner} /> Enviando...</> : '✓ Confirmar Pedido'}
                                 </button>
                             </div>
                         )}

@@ -1,26 +1,26 @@
-import { useState } from 'react';
-import { comandasApi } from '../../api';
-import { useAuth } from '../../contexts/AuthContext';
-import type { Mesa } from '../../types';
+import {useState} from 'react';
+import {comandasApi} from '../../api';
+import {useAuth} from '../../contexts/AuthContext';
+import type {Mesa} from '../../types';
 import LancarItensModal from '../comandas/LancarItensModal';
 import DivisaoContaModal from '../comandas/divisao/DivisaoContaModal';
 import styles from './MesaModal.module.css';
 
 interface Props {
     mesa: Mesa;
+    statusLabel: string;
     onClose: () => void;
     onRefresh: () => Promise<void>;
 }
 
-export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
-    const { isAdmin } = useAuth();
+export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props) {
+    const {isAdmin} = useAuth();
     const [nomeCliente, setNomeCliente] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showLancar, setShowLancar] = useState(false);
     const [showDivisao, setShowDivisao] = useState(false);
 
-    // ⚠️ comanda PRECISA ser declarada antes de qualquer early-return que a use
     const comanda = mesa.comandaAtiva;
 
     async function exec(fn: () => Promise<unknown>) {
@@ -29,8 +29,8 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
         try {
             await fn();
             await onRefresh();
-        } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : 'Erro ao executar ação.');
+        } catch (e: any) {
+            setError(e.response?.data?.message || e.message || 'Erro ao executar ação.');
         } finally {
             setLoading(false);
         }
@@ -41,7 +41,7 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
             <LancarItensModal
                 comanda={comanda}
                 mesa={mesa}
-                onClose={onClose}
+                onClose={() => setShowLancar(false)}
                 onRefresh={onRefresh}
             />
         );
@@ -51,10 +51,11 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
         return (
             <DivisaoContaModal
                 comanda={comanda}
-                onClose={() => setShowDivisao(false)}
+                onClose={() => setShowDivisao(false)} // Se só fechar pelo "X", fecha apenas a divisão
                 onSuccess={async () => {
-                    setShowDivisao(false);
-                    await onRefresh();
+                    setShowDivisao(false); // Esconde a divisão
+                    onClose();             // <-- A MÁGICA AQUI: Fecha o modal da mesa inteiro!
+                    onRefresh();     // Atualiza o mapa no fundo
                 }}
             />
         );
@@ -64,23 +65,20 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
         <div className={styles.backdrop} onClick={e => e.target === e.currentTarget && onClose()}>
             <div className={`${styles.modal} animate-scale`}>
 
-                {/* Header */}
                 <div className={styles.header}>
                     <div>
                         <h2 className={styles.title}>Mesa {mesa.numero}</h2>
-                        <StatusBadge status={mesa.status} />
-                    </div>
+                        <StatusBadge status={mesa.status} label={statusLabel} /></div>
                     <button className={styles.closeBtn} onClick={onClose}>✕</button>
                 </div>
 
-                {/* Body */}
                 <div className={styles.body}>
 
                     {/* ── DISPONIVEL ─────────────────────────────── */}
                     {mesa.status === 'DISPONIVEL' && (
                         <div className={styles.section}>
-                            <div style={{ marginBottom: '0.5rem' }}>
-                                <h3 style={{ color: 'var(--text)', marginBottom: '4px' }}>Novo Atendimento</h3>
+                            <div style={{marginBottom: '0.5rem'}}>
+                                <h3 style={{color: 'var(--text)', marginBottom: '4px'}}>Novo Atendimento</h3>
                                 <p className={styles.description}>Identifique o cliente para iniciar:</p>
                             </div>
 
@@ -99,7 +97,7 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
                                 onClick={() => exec(() => comandasApi.abrir(mesa.id, nomeCliente))}
                                 disabled={loading || !nomeCliente.trim()}
                             >
-                                {loading ? <Spinner /> : '▶ Abrir Mesa e Iniciar'}
+                                {loading ? <Spinner/> : '▶ Abrir Mesa e Iniciar'}
                             </button>
                         </div>
                     )}
@@ -107,7 +105,7 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
                     {/* ── OCUPADA ────────────────────────────────── */}
                     {mesa.status === 'OCUPADA' && comanda && (
                         <>
-                            <ComandaResumo comanda={comanda} />
+                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh}/>
 
                             <div className={styles.actions}>
                                 <button
@@ -122,7 +120,7 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
                                     onClick={() => exec(() => comandasApi.fechar(comanda.id))}
                                     disabled={loading}
                                 >
-                                    {loading ? <Spinner /> : '✓ Pedir Conta'}
+                                    {loading ? <Spinner/> : '✓ Pedir Conta'}
                                 </button>
                             </div>
                         </>
@@ -131,7 +129,7 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
                     {/* ── AGUARDANDO_PAGAMENTO ───────────────────── */}
                     {mesa.status === 'AGUARDANDO_PAGAMENTO' && comanda && (
                         <>
-                            <ComandaResumo comanda={comanda} />
+                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh}/>
 
                             <div className={styles.totalBox}>
                                 <span>Total a Receber</span>
@@ -142,21 +140,12 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
 
                             {isAdmin ? (
                                 <div className={styles.actions}>
-                                    {/* Dividir conta — botão secundário, largura total */}
                                     <button
-                                        className={`${styles.btn} ${styles.btnGhost}`}
+                                        className={`${styles.btn} ${styles.btnPrimary}`}
                                         onClick={() => setShowDivisao(true)}
                                         disabled={loading}
                                     >
-                                        ÷ Dividir Conta
-                                    </button>
-
-                                    <button
-                                        className={`${styles.btn} ${styles.btnGreen}`}
-                                        onClick={() => exec(() => comandasApi.finalizar(comanda.id))}
-                                        disabled={loading}
-                                    >
-                                        {loading ? <Spinner /> : '💰 Confirmar Pagamento'}
+                                        💰 Pagar / Dividir Conta
                                     </button>
 
                                     <button
@@ -184,20 +173,29 @@ export default function MesaModal({ mesa, onClose, onRefresh }: Props) {
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']> }) {
-    const { isAdmin } = useAuth();
+function ComandaResumo({
+                           comanda,
+                           mesa,
+                           onRefresh
+                       }: {
+    comanda: NonNullable<Mesa['comandaAtiva']>,
+    mesa: Mesa,
+    onRefresh: () => Promise<void>
+}) {
+    const {isAdmin} = useAuth();
     const [estornando, setEstornando] = useState<number | null>(null);
-    const [, forceUpdate] = useState(0);
+    const [erroLocal, setErroLocal] = useState<string | null>(null);
 
     async function estornar(itemId: number) {
         setEstornando(itemId);
+        setErroLocal(null);
         try {
             await comandasApi.estornarItem(comanda.id, itemId);
-            const idx = comanda.itens.findIndex(i => i.id === itemId);
-            if (idx !== -1) comanda.itens.splice(idx, 1);
-            forceUpdate(n => n + 1);
-        } catch {
-            // silently ignore
+            await onRefresh();
+        } catch (e: any) {
+            const msg = e.response?.data?.message || "Erro ao estornar item.";
+            setErroLocal(msg);
+            setTimeout(() => setErroLocal(null), 5000);
         } finally {
             setEstornando(null);
         }
@@ -217,6 +215,9 @@ function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']>
                 <span className={styles.itensCount}>{comanda.itens.length} itens</span>
             </div>
 
+            {erroLocal && <p className={styles.errorInline}
+                             style={{color: 'red', fontSize: '0.85rem', marginBottom: '8px'}}>{erroLocal}</p>}
+
             {comanda.itens.length === 0 ? (
                 <p className={styles.emptyItens}>Nenhum item lançado ainda.</p>
             ) : (
@@ -234,14 +235,14 @@ function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']>
                                 <span className={styles.itemTotal}>
                                     R$ {Number(item.totalItem).toFixed(2).replace('.', ',')}
                                 </span>
-                                {isAdmin && (
+                                { mesa.status === 'OCUPADA' && (
                                     <button
                                         className={styles.estornoBtn}
                                         onClick={() => estornar(item.id)}
                                         disabled={estornando === item.id}
                                         title="Estornar item"
                                     >
-                                        {estornando === item.id ? '…' : '✕'}
+                                        {estornando === item.id ? '…' : (item.quantidade > 1 ? '−' : '✕')}
                                     </button>
                                 )}
                             </div>
@@ -258,16 +259,14 @@ function ComandaResumo({ comanda }: { comanda: NonNullable<Mesa['comandaAtiva']>
     );
 }
 
-function StatusBadge({ status }: { status: string }) {
-    const map: Record<string, { label: string; cls: string }> = {
-        DISPONIVEL:          { label: 'Disponível',       cls: styles.badgeGreen  },
-        OCUPADA:             { label: 'Ocupada',          cls: styles.badgeOrange },
-        AGUARDANDO_PAGAMENTO:{ label: 'Aguard. Pagamento',cls: styles.badgeAmber  },
-    };
-    const { label, cls } = map[status] ?? { label: status, cls: '' };
+function StatusBadge({ status, label }: { status: string, label: string }) {
+    let cls = styles.badgeGreen;
+    if (status === 'OCUPADA') cls = styles.badgeOrange;
+    if (status === 'AGUARDANDO_PAGAMENTO') cls = styles.badgeAmber;
+
     return <span className={`${styles.badge} ${cls}`}>{label}</span>;
 }
 
 function Spinner() {
-    return <span className={styles.spinner} />;
+    return <span className={styles.spinner}/>;
 }

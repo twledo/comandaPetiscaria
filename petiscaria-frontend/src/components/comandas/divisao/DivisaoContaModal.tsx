@@ -1,46 +1,37 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Comanda, ItemPedido } from '../../types';
-import type {
-    MetodoPagamento,
-    PagamentoParcialDTO,
-    PagamentoItensDTO,
-    ParcelaPessoa,
-} from './divisaoTypes';
+import type { PagamentoItensDTO } from './divisaoTypes';
 import styles from './DivisaoContaModal.module.css';
-import {comandasApi} from "../../../api";
+import { comandasApi, dominiosApi } from "../../../api";
+import type { Opcao } from "../../../api";
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+type Tab    = 'itens' | 'igual' | 'valor';
+type Estado = 'idle'  | 'loading' | 'success' | 'error';
+interface CustomPerson { id: number; nome: string; valor: string; pago: boolean; }
 
-const API = '/api/comandas';
-
-const fmt = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',');
-
+// Função utilitária básica
 const precoUnitEfetivo = (item: ItemPedido): number => {
     const u = Number(item.precoUnitario);
     return item.meiaPorcao ? u * 0.6 : u;
 };
 
-const METODOS: { value: MetodoPagamento; label: string }[] = [
-    { value: 'DINHEIRO', label: 'Dinheiro' },
-    { value: 'PIX',      label: 'Pix'      },
-    { value: 'CREDITO',  label: 'Crédito'  },
-    { value: 'DEBITO',   label: 'Débito'   },
-];
-
-type Tab    = 'itens' | 'igual' | 'valor';
-type Estado = 'idle'  | 'loading' | 'success' | 'error';
-
-interface CustomPerson { id: number; nome: string; valor: string; }
-
-// ─── Props ────────────────────────────────────────────────────────────────────
+// Componente para renderizar o preço com as classes do CSS
+const RenderPrice = ({ value }: { value: number }) => {
+    const parts = value.toFixed(2).split('.');
+    return (
+        <span className={styles.currencyWrapper}>
+            <span className={styles.currencySymbol}>R$</span>
+            <span className={styles.currencyInteger}>{parts[0]}</span>
+            <span className={styles.currencyDecimal}>,{parts[1]}</span>
+        </span>
+    );
+};
 
 interface Props {
     comanda: Comanda;
     onClose: () => void;
     onSuccess: (comandaAtualizada: Comanda) => void;
 }
-
-// ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props) {
     const total  = Number(comanda.total);
@@ -50,9 +41,23 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
     const [estado, setEstado] = useState<Estado>('idle');
     const [erro,   setErro]   = useState<string | null>(null);
 
-    // ── aba "por itens" — mapa itemId → qtd selecionada ─────────────
+    // Validação Dupla
+    const [duplaValidacao, setDuplaValidacao] = useState<boolean>(false);
+    useEffect(() => setDuplaValidacao(false), [tab]);
+
+    // ── Domínios Dinâmicos ───────────────────────────────────────────
+    const [metodosDisp, setMetodosDisp] = useState<Opcao[]>([]);
+
+    useEffect(() => {
+        dominiosApi.buscarTodos()
+            .then(res => setMetodosDisp(res.metodosPagamento))
+            .catch(console.error);
+    }, []);
+
+    // ── aba "por itens" ──────────────────────────────────────────────
     const [qtdSel, setQtdSel] = useState<Map<number, number>>(new Map());
-    const [metodoItens, setMetodoItens] = useState<MetodoPagamento>('PIX');
+    const [conferidos, setConferidos] = useState<Set<number>>(new Set());
+    const [metodoItens, setMetodoItens] = useState<string>('PIX');
 
     const getQtd = (id: number) => qtdSel.get(id) ?? 0;
 
@@ -63,11 +68,33 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
             clamped === 0 ? next.delete(id) : next.set(id, clamped);
             return next;
         });
+        if (clamped === 0) toggleConferido(id, false);
     };
 
-    // Click na linha: toggle entre "tudo" e "nada"
-    const toggleLinha = (id: number, max: number) =>
-        setQtd(id, getQtd(id) > 0 ? 0 : max, max);
+    const toggleLinha = (id: number, max: number) => {
+        const sel = getQtd(id) > 0;
+        setQtd(id, sel ? 0 : max, max);
+    };
+
+    const toggleConferido = (id: number, force?: boolean) => {
+        setConferidos(prev => {
+            const next = new Set(prev);
+            const acao = force !== undefined ? force : !next.has(id);
+            acao ? next.add(id) : next.delete(id);
+            return next;
+        });
+    };
+
+    const handleSelectAll = () => {
+        if (qtdSel.size === itens.length) {
+            setQtdSel(new Map());
+            setConferidos(new Set());
+            return;
+        }
+        const novoMap = new Map<number, number>();
+        itens.forEach(item => novoMap.set(item.id!, Number(item.quantidade)));
+        setQtdSel(novoMap);
+    };
 
     const subtotalItens = useMemo(() => {
         let s = 0;
@@ -79,210 +106,192 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
     }, [qtdSel, itens]);
 
     const algumSelecionado = qtdSel.size > 0;
+    const todosConferidos = useMemo(() => {
+        if (qtdSel.size === 0) return false;
+        return Array.from(qtdSel.keys()).every(id => conferidos.has(id));
+    }, [qtdSel, conferidos]);
 
     // ── aba igualitária ──────────────────────────────────────────────
     const [numPessoas,  setNumPessoas]  = useState(2);
-    const [metodoIgual, setMetodoIgual] = useState<MetodoPagamento>('PIX');
+    const [metodoIgual, setMetodoIgual] = useState<string>('PIX');
+    const [pagosIgual, setPagosIgual]   = useState<Set<number>>(new Set());
+
     const valorPorPessoa = useMemo(
         () => Math.round((total / numPessoas) * 100) / 100,
-        [total, numPessoas],
+        [total, numPessoas]
     );
+
+    // Ajusta o número de pessoas e limpa os checks sobressalentes
+    const alterarNumPessoas = (val: number) => {
+        const clamped = Math.max(2, Math.min(20, val));
+        setNumPessoas(clamped);
+        setPagosIgual(prev => {
+            const next = new Set(prev);
+            for (let i = clamped; i < 20; i++) next.delete(i);
+            return next;
+        });
+    };
+
+    const togglePagoIgual = (index: number) => {
+        setPagosIgual(prev => {
+            const next = new Set(prev);
+            next.has(index) ? next.delete(index) : next.add(index);
+            return next;
+        });
+    };
+
+    // Validação de pagamentos da aba Igualitária
+    const todosPagosIgual = Array.from({ length: numPessoas }).every((_, i) => pagosIgual.has(i));
 
     // ── aba valor livre ──────────────────────────────────────────────
     const [persons, setPersons] = useState<CustomPerson[]>([
-        { id: 1, nome: 'Pessoa 1', valor: '' },
-        { id: 2, nome: 'Pessoa 2', valor: '' },
+        { id: 1, nome: '', valor: '', pago: false },
+        { id: 2, nome: '', valor: '', pago: false },
     ]);
-    const [metodoValor, setMetodoValor] = useState<MetodoPagamento>('PIX');
-    let nextId = persons.length + 1;
+    const [metodoValor, setMetodoValor] = useState<string>('PIX');
 
-    const somaPersons = useMemo(
-        () => persons.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0),
-        [persons],
-    );
+    const somaPersons = useMemo(() => {
+        return persons.reduce((s, p) => {
+            const val = parseFloat(String(p.valor).replace(',', '.'));
+            return s + (isNaN(val) ? 0 : val);
+        }, 0);
+    }, [persons]);
+
     const restante   = Math.round((total - somaPersons) * 100) / 100;
-    const percentual = Math.min(100, (somaPersons / total) * 100);
     const zerado     = Math.abs(restante) < 0.02;
     const excedido   = restante < -0.02;
+    const percentualBarra = Math.min(100, (somaPersons / total) * 100);
 
-    const addPerson = () =>
-        setPersons(prev => [...prev, { id: nextId++, nome: `Pessoa ${nextId - 1}`, valor: '' }]);
+    // Validação de pagamentos da aba Valor Livre
+    const todosPagosLivre = persons.length >= 2 && persons.every(p => p.pago) && zerado;
 
-    const removePerson = (id: number) =>
-        setPersons(prev => prev.filter(p => p.id !== id));
-
+    const addPerson = () => setPersons(prev => [...prev, { id: Date.now(), nome: '', valor: '', pago: false }]);
+    const removePerson = (id: number) => setPersons(prev => prev.filter(p => p.id !== id));
     const updatePerson = (id: number, field: 'nome' | 'valor', value: string) =>
         setPersons(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+    const togglePagoLivre = (id: number) =>
+        setPersons(prev => prev.map(p => p.id === id ? { ...p, pago: !p.pago } : p));
 
-    // ── chamadas de API ──────────────────────────────────────────────
-
-    const call = useCallback(async (path: string, body: unknown) => {
+    // ── API ─────────────────────────────────────────────────────────
+    const executarDivisao = useCallback(async (body: any) => {
         setEstado('loading');
         setErro(null);
         try {
-            const res = await fetch(`${API}/${comanda.id}${path}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify(body),
-            });
-            if (!res.ok) throw new Error((await res.text()) || `Erro ${res.status}`);
-            const data: Comanda = await res.json();
+            const data = await comandasApi.dividirConta(comanda.id, body);
             setEstado('success');
-            setTimeout(() => onSuccess(data), 1400);
-        } catch (e: unknown) {
+
+            // Alteração: Fecha o modal e avisa o pai exatamente ao mesmo tempo
+            setTimeout(() => {
+                onClose();
+                onSuccess(data);
+            }, 1000);
+
+        } catch (e: any) {
             setEstado('error');
-            setErro(e instanceof Error ? e.message : 'Erro inesperado');
+            setErro(e.message || 'Erro inesperado');
         }
-    }, [comanda.id, onSuccess]);
+    }, [comanda.id, onClose, onSuccess]);
 
     const confirmarItens = async () => {
         const body: PagamentoItensDTO = {
-            itens: Array.from(qtdSel.entries()).map(([itemId, quantidadePagar]) => ({
-                itemId,
-                quantidadePagar,
-            })),
+            itens: Array.from(qtdSel.entries()).map(([itemId, quantidadePagar]) => ({itemId, quantidadePagar})),
             metodoPagamento: metodoItens
         };
-
         setEstado('loading');
         try {
             const data = await comandasApi.pagarItens(comanda.id, body);
             setEstado('success');
-            setTimeout(() => onSuccess(data), 1400);
+
+            // Alteração: Fecha o modal e avisa o pai exatamente ao mesmo tempo
+            setTimeout(() => {
+                onClose();
+                onSuccess(data);
+            }, 1000);
+
         } catch (e: any) {
             setEstado('error');
             setErro(e.message);
         }
     };
 
-    const confirmarIgual = () => {
-        const body: PagamentoParcialDTO = {
-            modalidade: 'IGUALITARIO',
-            numeroPessoas: numPessoas,
-            metodoPagamento: metodoIgual,
-        };
-        call('/dividir-conta', body);
+    // ── LÓGICA DE VALIDAÇÃO DUPLA ──
+    const lidarComCliqueBotao = (acaoFinal: () => void) => {
+        if (!duplaValidacao) {
+            setDuplaValidacao(true);
+            setTimeout(() => setDuplaValidacao(false), 2500);
+        } else {
+            acaoFinal();
+            setDuplaValidacao(false);
+        }
     };
-
-    const confirmarValor = () => {
-        const parcelas: ParcelaPessoa[] = persons.map(p => ({
-            nomePessoa: p.nome,
-            valor: parseFloat(p.valor) || 0,
-        }));
-        const body: PagamentoParcialDTO = {
-            modalidade: 'VALOR_LIVRE',
-            parcelas,
-            metodoPagamento: metodoValor,
-        };
-        call('/dividir-conta', body);
-    };
-
-    // ── render ───────────────────────────────────────────────────────
 
     const renderBody = () => {
         if (estado === 'loading') return (
             <div className={styles.loadingOverlay}>
                 <div className={styles.spinner} />
-                <span className={styles.loadingText}>Registrando pagamento…</span>
+                <span className={styles.loadingText}>Processando pagamento...</span>
             </div>
         );
 
         if (estado === 'success') return (
             <div className={styles.successBox}>
                 <div className={styles.successIcon}>✓</div>
-                <p className={styles.successTitle}>Pagamento registrado!</p>
+                <h3 className={styles.successTitle}>Pagamento registrado!</h3>
                 <p className={styles.successSub}>A comanda foi atualizada com sucesso.</p>
             </div>
         );
 
         return (
-            <>
-                {/* ── TAB: por itens ───────────────────────────── */}
+            <div className={styles.body}>
+                {/* ─── ABA ITENS ─────────────────────────────────────────── */}
                 {tab === 'itens' && (
                     <>
-                        <p className={styles.hint}>
-                            Clique em um item para selecioná-lo inteiro, ou ajuste a quantidade
-                            nos controles <strong>+/−</strong> para pagar apenas parte.
-                        </p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.5rem 0 1rem 0' }}>
+                            <span className={styles.hint} style={{ margin: 0 }}>Selecione os itens e marque o check para confirmar.</span>
+                            <button type="button" className={styles.addPersonBtn} style={{ width: 'auto', padding: '0.4rem 0.8rem', margin: 0 }} onClick={handleSelectAll}>
+                                {qtdSel.size === itens.length ? 'Desmarcar Todos' : 'Selecionar Tudo'}
+                            </button>
+                        </div>
 
                         <div className={styles.itemsList}>
                             {itens.map(item => {
-                                const max  = Number(item.quantidade);
-                                const id   = item.id!;
-                                const qtd  = getQtd(id);
-                                const sel  = qtd > 0;
-                                const prU  = precoUnitEfetivo(item);
-                                const valorLinha = prU * (sel ? qtd : max);
+                                const max = Number(item.quantidade);
+                                const id = item.id!;
+                                const qtd = getQtd(id);
+                                const sel = qtd > 0;
+                                const prU = precoUnitEfetivo(item);
+                                const conferido = conferidos.has(id);
 
                                 return (
-                                    <div
-                                        key={id}
-                                        className={`${styles.itemRow} ${sel ? styles.itemRowSelected : ''}`}
-                                    >
-                                        {/* checkbox / toggle */}
-                                        <div
-                                            className={`${styles.checkBox} ${sel ? styles.checkBoxChecked : ''}`}
-                                            onClick={() => toggleLinha(id, max)}
-                                            role="checkbox"
-                                            aria-checked={sel}
-                                            tabIndex={0}
-                                            onKeyDown={e => e.key === ' ' && toggleLinha(id, max)}
-                                        >
+                                    <div key={id} className={`${styles.itemRow} ${sel ? styles.itemRowSelected : ''}`}>
+                                        <div className={`${styles.checkBox} ${sel ? styles.checkBoxChecked : ''}`} onClick={() => toggleLinha(id, max)}>
                                             {sel && '✓'}
                                         </div>
 
-                                        {/* info do produto — clique também faz toggle */}
-                                        <div
-                                            className={styles.itemInfo}
-                                            onClick={() => toggleLinha(id, max)}
-                                            style={{ cursor: 'pointer' }}
-                                        >
+                                        <div className={styles.itemInfo} onClick={() => toggleLinha(id, max)}>
                                             <div className={styles.itemName}>
-                                                {item.nomeProduto}
-                                                {item.meiaPorcao && (
-                                                    <span style={{ color: '#f97316', marginLeft: 4, fontSize: '0.65rem' }}>
-                            ½ porção
-                          </span>
-                                                )}
+                                                {item.nomeProduto} {item.meiaPorcao && ' (½)'}
                                             </div>
                                             <div className={styles.itemQty}>
-                                                {fmt(prU)} / un · {max} disponíve{max === 1 ? 'l' : 'is'}
-                                                {item.observacao ? ` · ${item.observacao}` : ''}
+                                                <RenderPrice value={prU} /> / un · {max} disp.
                                             </div>
                                         </div>
 
-                                        {/* controle de quantidade — só aparece quando selecionado */}
-                                        {sel && max > 1 ? (
-                                            <div className={styles.qtdControls} onClick={e => e.stopPropagation()}>
-                                                <button
-                                                    className={styles.qtdBtn}
-                                                    onClick={() => setQtd(id, qtd - 1, max)}
-                                                    aria-label="Diminuir"
-                                                >−</button>
-                                                <span className={styles.qtdNum}>{qtd}</span>
-                                                <button
-                                                    className={styles.qtdBtn}
-                                                    onClick={() => setQtd(id, qtd + 1, max)}
-                                                    disabled={qtd >= max}
-                                                    aria-label="Aumentar"
-                                                >+</button>
-                                            </div>
-                                        ) : (
-                                            // quando qtd == max ou não selecionado: mostra só o preço total
-                                            <div
-                                                className={styles.itemPrice}
-                                                onClick={() => toggleLinha(id, max)}
-                                                style={{ cursor: 'pointer' }}
-                                            >
-                                                {fmt(sel ? valorLinha : max * prU)}
-                                            </div>
+                                        {sel && (
+                                            <button type="button" className={`${styles.checkBox} ${conferido ? styles.checkBoxChecked : ''}`} style={{ borderRadius: '50%' }} onClick={(e) => { e.stopPropagation(); toggleConferido(id); }}>
+                                                {conferido ? '✓' : ''}
+                                            </button>
                                         )}
 
-                                        {/* preço da seleção atual (quando há controle de qtd) */}
-                                        {sel && max > 1 && (
-                                            <div className={styles.itemPrice} style={{ minWidth: 62, textAlign: 'right' }}>
-                                                {fmt(prU * qtd)}
+                                        {sel && max > 1 ? (
+                                            <div className={styles.qtdControls} onClick={e => e.stopPropagation()}>
+                                                <button className={styles.qtdBtn} onClick={() => setQtd(id, qtd - 1, max)}>−</button>
+                                                <span className={styles.qtdNum}>{qtd}</span>
+                                                <button className={styles.qtdBtn} onClick={() => setQtd(id, qtd + 1, max)} disabled={qtd >= max}>+</button>
+                                            </div>
+                                        ) : (
+                                            <div className={styles.itemPrice} onClick={() => toggleLinha(id, max)}>
+                                                <RenderPrice value={sel ? prU * qtd : max * prU} />
                                             </div>
                                         )}
                                     </div>
@@ -292,191 +301,210 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
 
                         <div className={styles.subtotalBox}>
                             <span className={styles.subtotalLabel}>Subtotal selecionado</span>
-                            <span className={styles.subtotalValue}>{fmt(subtotalItens)}</span>
+                            <span className={styles.subtotalValue}><RenderPrice value={subtotalItens} /></span>
                         </div>
 
-                        <MetodoSelect value={metodoItens} onChange={setMetodoItens} />
+                        <MetodoGrid value={metodoItens} onChange={setMetodoItens} opcoes={metodosDisp} />
 
                         <button
                             className={styles.confirmBtn}
-                            disabled={!algumSelecionado}
-                            onClick={confirmarItens}
+                            disabled={!algumSelecionado || !todosConferidos}
+                            onClick={() => lidarComCliqueBotao(confirmarItens)}
+                            style={duplaValidacao ? { backgroundColor: 'var(--accent)' } : {}}
                         >
-                            💰 Confirmar pagamento dos itens selecionados
+                            {!todosConferidos && algumSelecionado
+                                ? '📑 Marque o visto (✓) nos itens'
+                                : duplaValidacao ? '⚠ Confirmar pagamento?' : 'Confirmar selecionados'}
                         </button>
                     </>
                 )}
 
-                {/* ── TAB: igualitário ─────────────────────────── */}
+                {/* ─── ABA IGUALITÁRIO ───────────────────────────────────── */}
                 {tab === 'igual' && (
                     <>
-                        <p className={styles.hint}>
-                            O total será dividido em partes iguais entre as pessoas.
-                        </p>
+                        <p className={styles.hint}>Divida o valor total e marque quem já realizou o pagamento.</p>
 
-                        <div className={styles.eqControls}>
-                            <span className={styles.eqLabel}>Número de pessoas</span>
-                            <input
-                                className={styles.numericInput}
-                                type="number"
-                                min={2}
-                                max={20}
-                                value={numPessoas}
-                                onChange={e => setNumPessoas(Math.max(2, parseInt(e.target.value) || 2))}
-                            />
+                        <div className={styles.counterBox}>
+                            <span className={styles.counterLabel}>Número de pessoas na divisão</span>
+                            <div className={styles.bigCounter}>
+                                <button className={styles.counterBtn} onClick={() => alterarNumPessoas(numPessoas - 1)}>−</button>
+                                <span className={styles.counterValue}>{numPessoas}</span>
+                                <button className={styles.counterBtn} onClick={() => alterarNumPessoas(numPessoas + 1)}>+</button>
+                            </div>
                         </div>
 
-                        <div className={styles.eqGrid}>
-                            {Array.from({ length: numPessoas }, (_, i) => (
-                                <div key={i} className={styles.eqPersonCard}>
-                                    <span className={styles.eqPersonLabel}>Pessoa {i + 1}</span>
-                                    <span className={styles.eqPersonValue}>{fmt(valorPorPessoa)}</span>
-                                </div>
-                            ))}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
+                            {Array.from({ length: numPessoas }, (_, i) => {
+                                const pago = pagosIgual.has(i);
+                                return (
+                                    <div
+                                        key={i}
+                                        className={`${styles.eqPersonCard} ${pago ? styles.itemRowSelected : ''}`}
+                                        onClick={() => togglePagoIgual(i)}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            padding: '0.75rem', background: 'var(--bg-2)', border: '1px solid var(--border)',
+                                            borderRadius: '10px', cursor: 'pointer'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <div className={`${styles.checkBox} ${pago ? styles.checkBoxChecked : ''}`} style={{ borderRadius: '50%' }}>
+                                                {pago ? '✓' : ''}
+                                            </div>
+                                            <span style={{ fontSize: '0.85rem', color: pago ? 'var(--text)' : 'var(--text-2)' }}>Pessoa {i + 1}</span>
+                                        </div>
+                                        <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>
+                                            <RenderPrice value={valorPorPessoa} />
+                                        </span>
+                                    </div>
+                                );
+                            })}
                         </div>
 
-                        <MetodoSelect value={metodoIgual} onChange={setMetodoIgual} />
-
-                        <button className={styles.confirmBtn} onClick={confirmarIgual}>
-                            💰 Confirmar divisão igualitária
-                        </button>
-                    </>
-                )}
-
-                {/* ── TAB: valor livre ─────────────────────────── */}
-                {tab === 'valor' && (
-                    <>
-                        <p className={styles.hint}>
-                            Defina quanto cada pessoa paga — podem ser valores diferentes.
-                        </p>
-
-                        <div className={styles.customRows}>
-                            {persons.map(p => (
-                                <div key={p.id} className={styles.customPersonRow}>
-                                    <input
-                                        className={styles.personNameInput}
-                                        type="text"
-                                        value={p.nome}
-                                        placeholder="Nome"
-                                        onChange={e => updatePerson(p.id, 'nome', e.target.value)}
-                                    />
-                                    <input
-                                        className={styles.personAmountInput}
-                                        type="number"
-                                        min={0}
-                                        step={0.01}
-                                        value={p.valor}
-                                        placeholder="0,00"
-                                        onChange={e => updatePerson(p.id, 'valor', e.target.value)}
-                                    />
-                                    {persons.length > 2 && (
-                                        <button
-                                            className={styles.removeBtn}
-                                            onClick={() => removePerson(p.id)}
-                                            aria-label="Remover pessoa"
-                                        >✕</button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-
-                        <button className={styles.addPersonBtn} onClick={addPerson}>
-                            + Adicionar pessoa
-                        </button>
-
-                        <div className={styles.remainderBar}>
-                            <span className={styles.remainderLabel}>Restante a distribuir</span>
-                            <span className={`${styles.remainderValue} ${zerado ? styles.remainderOk : excedido ? styles.remainderOver : ''}`}>
-                {zerado ? 'Zerado ✓' : `${fmt(Math.abs(restante))}${excedido ? ' (excedido)' : ' restante'}`}
-              </span>
-                        </div>
-
-                        <div className={styles.meter}>
-                            <div
-                                className={`${styles.meterFill} ${excedido ? styles.meterOver : ''}`}
-                                style={{ width: `${percentual}%` }}
-                            />
-                        </div>
-
-                        <MetodoSelect value={metodoValor} onChange={setMetodoValor} />
+                        <MetodoGrid value={metodoIgual} onChange={setMetodoIgual} opcoes={metodosDisp} />
 
                         <button
                             className={styles.confirmBtn}
-                            disabled={!zerado || persons.length < 2}
-                            onClick={confirmarValor}
+                            disabled={!todosPagosIgual}
+                            onClick={() => lidarComCliqueBotao(() => executarDivisao({
+                                modalidade: 'IGUALITARIO',
+                                numeroPessoas: numPessoas,
+                                metodoPagamento: metodoIgual
+                            }))}
+                            style={duplaValidacao ? { backgroundColor: 'var(--accent)' } : {}}
                         >
-                            💰 Confirmar divisão por valor
+                            {!todosPagosIgual
+                                ? 'Marque todos como pagos (✓)'
+                                : duplaValidacao ? '⚠ Confirmar divisão?' : 'Confirmar Divisão Igualitária'}
                         </button>
                     </>
                 )}
 
-                {estado === 'error' && erro && (
-                    <p style={{ color: '#e74c3c', fontSize: '0.8rem', marginTop: '0.5rem', textAlign: 'center' }}>
-                        ⚠ {erro}
-                    </p>
+                {/* ─── ABA VALOR LIVRE ───────────────────────────────────── */}
+                {tab === 'valor' && (
+                    <>
+                        <p className={styles.hint}>Defina o valor e marque o check (✓) de quem já pagou sua parte.</p>
+
+                        <div className={styles.customRows}>
+                            {persons.map(p => {
+                                return (
+                                    <div key={p.id} className={`${styles.customPersonRow} ${p.pago ? styles.itemRowSelected : ''}`} style={{ padding: '0.25rem', borderRadius: '10px', transition: 'all 0.2s', background: p.pago ? 'color-mix(in srgb, var(--accent) 5%, transparent)' : 'transparent' }}>
+                                        <div
+                                            className={`${styles.checkBox} ${p.pago ? styles.checkBoxChecked : ''}`}
+                                            style={{ borderRadius: '50%', cursor: 'pointer', margin: '0 0.25rem' }}
+                                            onClick={() => togglePagoLivre(p.id)}
+                                        >
+                                            {p.pago ? '✓' : ''}
+                                        </div>
+
+                                        <input className={styles.personNameInput} type="text" placeholder="Nome (opc)" value={p.nome} onChange={e => updatePerson(p.id, 'nome', e.target.value)} />
+                                        <input className={styles.personAmountInput} type="number" min={0} step={0.01} placeholder="0,00" value={p.valor} onChange={e => updatePerson(p.id, 'valor', e.target.value)} />
+
+                                        {persons.length > 2 && (
+                                            <button className={styles.removeBtn} onClick={() => removePerson(p.id)}>✕</button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <button className={styles.addPersonBtn} onClick={addPerson}>+ Adicionar Pagador</button>
+
+                        <div className={styles.meter}>
+                            <div className={`${styles.meterFill} ${excedido ? styles.meterOver : ''}`} style={{ width: `${percentualBarra}%` }} />
+                        </div>
+
+                        <div className={styles.remainderBar}>
+                            <span className={styles.remainderLabel}>Status da soma:</span>
+                            <span className={`${styles.remainderValue} ${zerado ? styles.remainderOk : excedido ? styles.remainderOver : ''}`}>
+                                {zerado ? '✅ Conta Fechada' : excedido ? '⚠️ Excedeu ' : 'Falta '}
+                                {!zerado && <RenderPrice value={Math.abs(restante)} />}
+                            </span>
+                        </div>
+
+                        <MetodoGrid value={metodoValor} onChange={setMetodoValor} opcoes={metodosDisp} />
+
+                        <button
+                            className={styles.confirmBtn}
+                            disabled={!todosPagosLivre}
+                            onClick={() => lidarComCliqueBotao(() => executarDivisao({
+                                modalidade: 'VALOR_LIVRE',
+                                parcelas: persons.map(p => ({
+                                    nomePessoa: p.nome,
+                                    valor: parseFloat(String(p.valor).replace(',', '.')) || 0
+                                })),
+                                metodoPagamento: metodoValor
+                            }))}
+                            style={duplaValidacao ? { backgroundColor: 'var(--accent)' } : {}}
+                        >
+                            {!zerado
+                                ? 'Ajuste os valores para fechar'
+                                : (!todosPagosLivre)
+                                    ? 'Marque todos como pagos (✓)'
+                                    : duplaValidacao ? '⚠ Confirmar pagamentos?' : 'Confirmar Valores Livres'}
+                        </button>
+                    </>
                 )}
-            </>
+
+                {estado === 'error' && erro && <div className={styles.errorMsg}>⚠ {erro}</div>}
+            </div>
         );
     };
 
     return (
         <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Divisão de conta">
+            <div className={styles.modal}>
 
-                <div className={styles.header}>
-                    <div className={styles.headerInfo}>
-                        <h2 className={styles.title}>Divisão de conta</h2>
-                        <p className={styles.subtitle}>
-                            Mesa {comanda.mesa?.numero} — Comanda #{comanda.id} · {comanda.nomeCliente}
-                        </p>
+                <div className={styles.header} style={{ padding: '1.25rem 1.25rem 1rem 1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div className={styles.headerInfo}>
+                            <h2 className={styles.title}>Divisão de Conta</h2>
+                            <p className={styles.subtitle}>Mesa {comanda.mesa?.numero} — Comanda #{comanda.id}</p>
+                        </div>
+                        <button className={styles.closeBtn} onClick={onClose}>✕</button>
                     </div>
-                    <button className={styles.closeBtn} onClick={onClose} aria-label="Fechar">✕</button>
                 </div>
 
                 <div className={styles.totalBar}>
-                    <span className={styles.totalLabel}>Total da comanda</span>
-                    <span className={styles.totalValue}>{fmt(total)}</span>
+                    <span className={styles.totalLabel}>Total da Comanda</span>
+                    <span className={styles.totalValue}>
+                        <RenderPrice value={total} />
+                    </span>
                 </div>
 
                 {(estado === 'idle' || estado === 'error') && (
-                    <div className={styles.tabs}>
-                        <TabBtn active={tab === 'itens'} onClick={() => setTab('itens')} icon="☰">Por itens</TabBtn>
-                        <TabBtn active={tab === 'igual'} onClick={() => setTab('igual')} icon="👥">Igualitário</TabBtn>
-                        <TabBtn active={tab === 'valor'} onClick={() => setTab('valor')} icon="⚖">Valor livre</TabBtn>
+                    <div style={{ padding: '0 1.25rem', marginTop: '1rem' }}>
+                        <div className={styles.tabs}>
+                            <div className={`${styles.tab} ${tab === 'itens' ? styles.tabActive : ''}`} onClick={() => setTab('itens')}>Itens</div>
+                            <div className={`${styles.tab} ${tab === 'igual' ? styles.tabActive : ''}`} onClick={() => setTab('igual')}>Igual</div>
+                            <div className={`${styles.tab} ${tab === 'valor' ? styles.tabActive : ''}`} onClick={() => setTab('valor')}>Livre</div>
+                        </div>
                     </div>
                 )}
 
-                <div className={styles.body}>{renderBody()}</div>
+                {renderBody()}
             </div>
         </div>
     );
 }
 
-// ─── Sub-componentes ──────────────────────────────────────────────────────────
-
-function TabBtn({ active, onClick, icon, children }: {
-    active: boolean; onClick: () => void; icon: string; children: React.ReactNode;
-}) {
-    return (
-        <button className={`${styles.tab} ${active ? styles.tabActive : ''}`} onClick={onClick}>
-            <span>{icon}</span>{children}
-        </button>
-    );
-}
-
-function MetodoSelect({ value, onChange }: {
-    value: MetodoPagamento; onChange: (v: MetodoPagamento) => void;
-}) {
+// ─── Componente usando o CSS de Grid para os Métodos de Pagamento ───
+function MetodoGrid({ value, onChange, opcoes }: { value: string, onChange: (val: string) => void, opcoes: Opcao[] }) {
     return (
         <div className={styles.methodRow}>
-            <span className={styles.methodLabel}>Forma de pagamento</span>
-            <select
-                className={styles.methodSelect}
-                value={value}
-                onChange={e => onChange(e.target.value as MetodoPagamento)}
-            >
-                {METODOS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
+            <span className={styles.methodLabel}>Forma de Pagamento Base</span>
+            <div className={styles.metodoGrid}>
+                {opcoes.map(m => (
+                    <button
+                        key={String(m.value)}
+                        type="button"
+                        className={`${styles.metodoBtn} ${value === String(m.value) ? styles.metodoActive : ''}`}
+                        onClick={() => onChange(String(m.value))}
+                    >
+                        {m.label}
+                    </button>
+                ))}
+            </div>
         </div>
     );
 }

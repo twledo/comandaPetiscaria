@@ -3,22 +3,16 @@ import styles from './MesaCard.module.css';
 
 interface Props {
   mesa: Mesa;
+  statusLabel: string; // <-- NOVA PROP
   onClick: (mesa: Mesa) => void;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  DISPONIVEL: 'DISPONÍVEL',
-  OCUPADA: 'OCUPADA',
-  AGUARDANDO_PAGAMENTO: 'AGUARD. PGTO',
-};
-
-export default function MesaCard({ mesa, onClick }: Props) {
+export default function MesaCard({ mesa, statusLabel, onClick }: Props) {
   const statusClass = mesa.status.toLowerCase().replace('_', '-');
   const comanda = mesa.comandaAtiva;
 
-  // Tratativa para o total (lidando com o objeto complexo que vimos no JSON)
   const valorTotal = typeof comanda?.total === 'object'
-      ? comanda.total.parsedValue
+      ? (comanda.total as any).parsedValue
       : comanda?.total;
 
   return (
@@ -29,30 +23,20 @@ export default function MesaCard({ mesa, onClick }: Props) {
         <div className={styles.header}>
           <div className={styles.statusGroup}>
             <span className={styles.dot} />
-            <span className={styles.statusLabel}>{STATUS_LABELS[mesa.status]}</span>
+            <span className={styles.statusLabel}>{statusLabel}</span>
           </div>
-
-          {/* EXIBIÇÃO DO NOME DO CLIENTE NO TOPO DO CARD */}
           {comanda?.nomeCliente && (
               <span className={styles.clienteNome} title={comanda.nomeCliente}>
                 {comanda.nomeCliente.toUpperCase()}
           </span>
           )}
         </div>
-
         <div className={styles.numero}>{mesa.numero}</div>
-
         {valorTotal !== undefined && valorTotal !== null && (
             <div className={styles.total}>
               R$ {Number(valorTotal).toFixed(2).replace('.', ',')}
             </div>
         )}
-
-        <div className={styles.action}>
-          {mesa.status === 'DISPONIVEL' && 'Iniciar →'}
-          {mesa.status === 'OCUPADA' && 'Lançar item →'}
-          {mesa.status === 'AGUARDANDO_PAGAMENTO' && 'Ver conta →'}
-        </div>
       </button>
   );
 }

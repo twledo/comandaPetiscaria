@@ -61,6 +61,7 @@ public class SecurityConfig {
                     req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/registrar").hasRole(TipoUsuario.ADMIN.name());
 
                     req.requestMatchers("/api/usuarios/registrar").hasRole(TipoUsuario.ADMIN.name());
+                    req.requestMatchers(HttpMethod.GET, "/api/produtos/cardapio/**").hasAnyRole(TipoUsuario.ADMIN.name(), TipoUsuario.GARCOM.name());
                     req.requestMatchers("/api/produtos/**").hasRole(TipoUsuario.ADMIN.name());
                     req.requestMatchers("/api/comandas/**").hasAnyRole(TipoUsuario.ADMIN.name(), TipoUsuario.GARCOM.name());
                     req.requestMatchers("/api/mesas/**").hasAnyRole(TipoUsuario.ADMIN.name(), TipoUsuario.GARCOM.name());

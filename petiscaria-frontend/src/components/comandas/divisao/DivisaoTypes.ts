@@ -14,7 +14,7 @@ export interface PagamentoParcialDTO {
     modalidade: ModalidadeDivisao;
     numeroPessoas?: number;       // IGUALITARIO
     parcelas?: ParcelaPessoa[];   // VALOR_LIVRE
-    metodoPagamento: MetodoPagamento;
+    metodoPagamento: String;
 }
 
 // Body para POST /api/comandas/{id}/pagar-itens
@@ -25,5 +25,5 @@ export interface ItemSelecionado {
 
 export interface PagamentoItensDTO {
     itens: ItemSelecionado[];
-    metodoPagamento: MetodoPagamento;
+    metodoPagamento: String;
 }

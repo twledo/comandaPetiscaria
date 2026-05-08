@@ -49,6 +49,24 @@ export const mesasApi = {
     listarDisponiveis: () => request<Mesa[]>('/api/mesas/disponiveis'),
 };
 
+// ── Enuns ──────────────────────────────────────────────────────────────────
+export interface Opcao {
+    value: string | number;
+    label: string;
+}
+
+export interface Dominios {
+    categorias: Opcao[];
+    unidades: Opcao[];
+    metodosPagamento: Opcao[];
+    statusMesa: Opcao[];
+    statusComanda: Opcao[];
+}
+
+export const dominiosApi = {
+    buscarTodos: () => request<Dominios>('/api/dominios'),
+};
+
 // ── Comandas ──────────────────────────────────────────────────────────────────
 export const comandasApi = {
     abrir: (mesaId: number, nomeCliente: string) =>
@@ -128,5 +146,5 @@ export const produtosApi = {
         }),
 
     alternarEstoque: (id: number) =>
-        request<Produto>(`/api/produtos/${id}/estoque`, {method: 'PATCH'}),
+        request<Produto>(`/api/produtos/${id}/estoque`, { method: 'PATCH' }),
 };
