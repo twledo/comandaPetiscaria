@@ -10,7 +10,8 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "itens_pedido")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -28,6 +29,7 @@ public class ItemPedido {
     @JoinColumn(name = "produto_id")
     private Produto produto;
 
+    private String numeroPedido;
     private String nomeProduto; // Snapshot: Nome no momento da compra
     private Long quantidade;
     private BigDecimal precoUnitario; // Snapshot: Preço no momento da compra

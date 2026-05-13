@@ -5,8 +5,8 @@ import styles from './DivisaoContaModal.module.css';
 import { comandasApi, dominiosApi } from "../../../api";
 import type { Opcao } from "../../../api";
 
-type Tab    = 'itens' | 'igual' | 'valor';
-type Estado = 'idle'  | 'loading' | 'success' | 'error';
+type Tab = 'itens' | 'igual' | 'valor';
+type Estado = 'idle' | 'loading' | 'success' | 'error';
 interface CustomPerson { id: number; nome: string; valor: string; pago: boolean; }
 
 // Função utilitária básica
@@ -34,12 +34,12 @@ interface Props {
 }
 
 export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props) {
-    const total  = Number(comanda.total);
+    const total = Number(comanda.total);
     const itens: ItemPedido[] = comanda.itens ?? [];
 
-    const [tab,    setTab]    = useState<Tab>('itens');
+    const [tab, setTab] = useState<Tab>('itens');
     const [estado, setEstado] = useState<Estado>('idle');
-    const [erro,   setErro]   = useState<string | null>(null);
+    const [erro, setErro] = useState<string | null>(null);
 
     // Validação Dupla
     const [duplaValidacao, setDuplaValidacao] = useState<boolean>(false);
@@ -112,16 +112,15 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
     }, [qtdSel, conferidos]);
 
     // ── aba igualitária ──────────────────────────────────────────────
-    const [numPessoas,  setNumPessoas]  = useState(2);
+    const [numPessoas, setNumPessoas] = useState(2);
     const [metodoIgual, setMetodoIgual] = useState<string>('PIX');
-    const [pagosIgual, setPagosIgual]   = useState<Set<number>>(new Set());
+    const [pagosIgual, setPagosIgual] = useState<Set<number>>(new Set());
 
     const valorPorPessoa = useMemo(
         () => Math.round((total / numPessoas) * 100) / 100,
         [total, numPessoas]
     );
 
-    // Ajusta o número de pessoas e limpa os checks sobressalentes
     const alterarNumPessoas = (val: number) => {
         const clamped = Math.max(2, Math.min(20, val));
         setNumPessoas(clamped);
@@ -140,7 +139,6 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
         });
     };
 
-    // Validação de pagamentos da aba Igualitária
     const todosPagosIgual = Array.from({ length: numPessoas }).every((_, i) => pagosIgual.has(i));
 
     // ── aba valor livre ──────────────────────────────────────────────
@@ -157,12 +155,11 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
         }, 0);
     }, [persons]);
 
-    const restante   = Math.round((total - somaPersons) * 100) / 100;
-    const zerado     = Math.abs(restante) < 0.02;
-    const excedido   = restante < -0.02;
+    const restante = Math.round((total - somaPersons) * 100) / 100;
+    const zerado = Math.abs(restante) < 0.02;
+    const excedido = restante < -0.02;
     const percentualBarra = Math.min(100, (somaPersons / total) * 100);
 
-    // Validação de pagamentos da aba Valor Livre
     const todosPagosLivre = persons.length >= 2 && persons.every(p => p.pago) && zerado;
 
     const addPerson = () => setPersons(prev => [...prev, { id: Date.now(), nome: '', valor: '', pago: false }]);
@@ -180,11 +177,16 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
             const data = await comandasApi.dividirConta(comanda.id, body);
             setEstado('success');
 
-            // Alteração: Fecha o modal e avisa o pai exatamente ao mesmo tempo
             setTimeout(() => {
-                onClose();
                 onSuccess(data);
-            }, 0);
+
+                if (data.status === 'FINALIZADA') {
+                    onClose();
+                } else {
+                    setEstado('idle');
+                    setPagosIgual(new Set());
+                }
+            }, 1500);
 
         } catch (e: any) {
             setEstado('error');
@@ -194,19 +196,27 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
 
     const confirmarItens = async () => {
         const body: PagamentoItensDTO = {
-            itens: Array.from(qtdSel.entries()).map(([itemId, quantidadePagar]) => ({itemId, quantidadePagar})),
+            itens: Array.from(qtdSel.entries()).map(([itemId, quantidadePagar]) => ({ itemId, quantidadePagar })),
             metodoPagamento: metodoItens
         };
+
         setEstado('loading');
+
         try {
             const data = await comandasApi.pagarItens(comanda.id, body);
             setEstado('success');
 
-            // Alteração: Fecha o modal e avisa o pai exatamente ao mesmo tempo
             setTimeout(() => {
-                onClose();
                 onSuccess(data);
-            }, 0);
+
+                if (data.status === 'FINALIZADA' || !data.itens || data.itens.length === 0) {
+                    onClose();
+                } else {
+                    setEstado('idle');
+                    setQtdSel(new Map());
+                    setConferidos(new Set());
+                }
+            }, 1500);
 
         } catch (e: any) {
             setEstado('error');
@@ -246,8 +256,9 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
                 {/* ─── ABA ITENS ─────────────────────────────────────────── */}
                 {tab === 'itens' && (
                     <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.5rem 0 1rem 0' }}>
-                            <span className={styles.hint} style={{ margin: 0 }}>Selecione os itens e marque o check para confirmar.</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', }}>
+                            <span className={styles.hint} style={{ margin: 0 }}>Clique no check (✓) para confirmar o pagamento.</span>
+
                             <button type="button" className={styles.addPersonBtn} style={{ width: 'auto', padding: '0.4rem 0.8rem', margin: 0 }} onClick={handleSelectAll}>
                                 {qtdSel.size === itens.length ? 'Desmarcar Todos' : 'Selecionar Tudo'}
                             </button>
@@ -279,7 +290,7 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
 
                                         {sel && (
                                             <button type="button" className={`${styles.checkBox} ${conferido ? styles.checkBoxChecked : ''}`} style={{ borderRadius: '50%' }} onClick={(e) => { e.stopPropagation(); toggleConferido(id); }}>
-                                                {conferido ? '✓' : ''}
+                                                asdsa{conferido ? '✓' : ''}
                                             </button>
                                         )}
 
@@ -322,7 +333,7 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
                 {/* ─── ABA IGUALITÁRIO ───────────────────────────────────── */}
                 {tab === 'igual' && (
                     <>
-                        <p className={styles.hint}>Divida o valor total e marque quem já realizou o pagamento.</p>
+                        <p className={styles.hint}>Marque o check (✓) de quem já pagou sua parte.</p>
 
                         <div className={styles.counterBox}>
                             <span className={styles.counterLabel}>Número de pessoas na divisão</span>
@@ -397,8 +408,8 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
                                             {p.pago ? '✓' : ''}
                                         </div>
 
-                                        <input className={styles.personNameInput} type="text" placeholder="Nome (opc)" value={p.nome} onChange={e => updatePerson(p.id, 'nome', e.target.value)} />
-                                        <input className={styles.personAmountInput} type="number" min={0} step={0.01} placeholder="0,00" value={p.valor} onChange={e => updatePerson(p.id, 'valor', e.target.value)} />
+                                        <input className={styles.personNameInput} type="text" placeholder="Nome (opcional)" value={p.nome} onChange={e => updatePerson(p.id, 'nome', e.target.value)} />
+                                        <input className={styles.personAmountInput} type="number" min={0} step={0.01} placeholder="R$ 0,00" value={p.valor} onChange={e => updatePerson(p.id, 'valor', e.target.value)} />
 
                                         {persons.length > 2 && (
                                             <button className={styles.removeBtn} onClick={() => removePerson(p.id)}>✕</button>
@@ -445,26 +456,37 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
                         </button>
                     </>
                 )}
-
-                {estado === 'error' && erro && <div className={styles.errorMsg}>⚠ {erro}</div>}
             </div>
         );
     };
 
     return (
-        <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+        <div
+            className={styles.overlay}
+            onClick={(e) => e.target === e.currentTarget && onClose()}
+        >
             <div className={styles.modal}>
-
-                <div className={styles.header} style={{ padding: '1.25rem 1.25rem 1rem 1.25rem' }}>
+                {/* --- FIXED HEADER (Always accessible) --- */}
+                <header className={styles.header}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div className={styles.headerInfo}>
                             <h2 className={styles.title}>Divisão de Conta</h2>
-                            <p className={styles.subtitle}>Mesa {comanda.mesa?.numero} — Comanda #{comanda.id}</p>
+                            <p className={styles.subtitle}>
+                                Mesa {comanda.mesa?.numero} — Comanda #{comanda.id}
+                            </p>
                         </div>
-                        <button className={styles.closeBtn} onClick={onClose}>✕</button>
+                        <button
+                            type="button"
+                            className={styles.closeBtn}
+                            onClick={onClose}
+                            aria-label="Fechar modal"
+                        >
+                            ✕
+                        </button>
                     </div>
-                </div>
+                </header>
 
+                {/* --- TOTAL DISPLAY --- */}
                 <div className={styles.totalBar}>
                     <span className={styles.totalLabel}>Total da Comanda</span>
                     <span className={styles.totalValue}>
@@ -472,17 +494,33 @@ export default function DivisaoContaModal({ comanda, onClose, onSuccess }: Props
                     </span>
                 </div>
 
-                {(estado === 'idle' || estado === 'error') && (
+                {/* --- NAVIGATION TABS --- */}
+                {estado === 'idle' && (
                     <div style={{ padding: '0 1.25rem', marginTop: '1rem' }}>
                         <div className={styles.tabs}>
-                            <div className={`${styles.tab} ${tab === 'itens' ? styles.tabActive : ''}`} onClick={() => setTab('itens')}>Itens</div>
-                            <div className={`${styles.tab} ${tab === 'igual' ? styles.tabActive : ''}`} onClick={() => setTab('igual')}>Igual</div>
-                            <div className={`${styles.tab} ${tab === 'valor' ? styles.tabActive : ''}`} onClick={() => setTab('valor')}>Livre</div>
+                            {(['itens', 'igual', 'valor'] as const).map((t) => (
+                                <button
+                                    key={t}
+                                    type="button"
+                                    className={`${styles.tab} ${tab === t ? styles.tabActive : ''}`}
+                                    onClick={() => setTab(t)}
+                                >
+                                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 )}
 
+                {/* --- DYNAMIC CONTENT --- */}
                 {renderBody()}
+
+                {/* --- ERROR FOOTER --- */}
+                {estado === 'error' && erro && (
+                    <div style={{ padding: '1rem' }}>
+                        <div className={styles.errorMsg}>⚠ {erro}</div>
+                    </div>
+                )}
             </div>
         </div>
     );

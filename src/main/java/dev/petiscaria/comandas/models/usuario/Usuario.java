@@ -42,7 +42,6 @@ public class Usuario implements UserDetails {
     public Collection<? extends GrantedAuthority> getAuthorities() {
         if (this.cargo == TipoUsuario.ADMIN) {
             return List.of(
-                    new SimpleGrantedAuthority("ROLE_" + this.cargo.name()),
                     new SimpleGrantedAuthority("ROLE_" + this.cargo.name())
             );
         }

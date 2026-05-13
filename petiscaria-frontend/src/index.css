@@ -1,64 +1,123 @@
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
-/* ── Tokens ──────────────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════════
+   🎨 DESIGN TOKENS - DARK MODE
+   ════════════════════════════════════════════════════════════════════════════════ */
 :root[data-theme="dark"] {
-  --bg:          #0e0e11;
-  --bg-2:        #16161b;
-  --bg-3:        #1e1e26;
-  --surface:     #24242f;
-  --surface-2:   #2c2c3a;
-  --border:      rgba(255,255,255,0.08);
-  --border-2:    rgba(255,255,255,0.14);
+  /* Backgrounds */
+  --bg:              #0a0a0e;
+  --bg-2:            #13131a;
+  --bg-3:            #1a1a24;
+  --surface:         #1f1f2e;
+  --surface-2:       #27272f;
 
-  --text:        #f0f0f5;
-  --text-2:      #a0a0b8;
-  --text-3:      #6060788;
+  /* Text */
+  --text:            #f2f2f7;
+  --text-2:          #9ca3af;
+  --text-3:          #6b7280;
 
-  --accent:      #f97316;
-  --accent-dim:  rgba(249,115,22,0.15);
-  --accent-glow: rgba(249,115,22,0.3);
+  /* Borders */
+  --border:          rgba(255,255,255,0.08);
+  --border-2:        rgba(255,255,255,0.12);
 
-  --green:       #22c55e;
-  --green-dim:   rgba(34,197,94,0.15);
-  --amber:       #f59e0b;
-  --amber-dim:   rgba(245,158,11,0.15);
-  --red:         #ef4444;
-  --red-dim:     rgba(239,68,68,0.15);
-  --blue:        #3b82f6;
-  --blue-dim:    rgba(59,130,246,0.15);
+  /* Primary (Azul) */
+  --primary:         #3b82f6;
+  --primary-dim:     rgba(59,130,246,0.12);
+  --primary-muted:   rgba(59,130,246,0.08);
 
-  --shadow:      0 4px 24px rgba(0,0,0,0.4);
-  --shadow-lg:   0 8px 40px rgba(0,0,0,0.6);
+  /* Success (Verde) */
+  --success:         #10b981;
+  --success-dim:     rgba(16,185,129,0.12);
+  --success-muted:   rgba(16,185,129,0.08);
+
+  /* Action (Laranja) */
+  --action:          #f97316;
+  --action-dim:      rgba(249,115,22,0.12);
+  --action-muted:    rgba(249,115,22,0.08);
+
+  /* Semantic Colors */
+  --warning:         #f59e0b;
+  --warning-dim:     rgba(245,158,11,0.12);
+  --danger:          #ef4444;
+  --danger-dim:      rgba(239,68,68,0.12);
+
+  /* Shadows */
+  --shadow:          0 4px 12px rgba(0,0,0,0.3);
+  --shadow-md:       0 8px 20px rgba(0,0,0,0.35);
+  --shadow-lg:       0 12px 32px rgba(0,0,0,0.4);
+
+  /* Legacy aliases for compatibility */
+  --accent:          var(--action);
+  --accent-dim:      var(--action-dim);
+  --accent-glow:     rgba(249,115,22,0.2);
+  --green:           var(--success);
+  --green-dim:       var(--success-dim);
+  --amber:           var(--warning);
+  --amber-dim:       var(--warning-dim);
+  --red:             var(--danger);
+  --red-dim:         var(--danger-dim);
+  --blue:            var(--primary);
+  --blue-dim:        var(--primary-dim);
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════
+   🎨 DESIGN TOKENS - LIGHT MODE
+   ════════════════════════════════════════════════════════════════════════════════ */
 :root[data-theme="light"] {
-  --bg:          #f5f4f0;
-  --bg-2:        #eeede8;
-  --bg-3:        #e6e4de;
-  --surface:     #ffffff;
-  --surface-2:   #f9f8f5;
-  --border:      rgba(0,0,0,0.08);
-  --border-2:    rgba(0,0,0,0.14);
+  /* Backgrounds */
+  --bg:              #f8f8fa;
+  --bg-2:            #f2f2f5;
+  --bg-3:            #e8e8ed;
+  --surface:         #ffffff;
+  --surface-2:       #fafafc;
 
-  --text:        #1a1a22;
-  --text-2:      #5a5a6e;
-  --text-3:      #9090a8;
+  /* Text */
+  --text:            #0f0f1e;
+  --text-2:          #6b7280;
+  --text-3:          #9ca3af;
 
-  --accent:      #ea6c0a;
-  --accent-dim:  rgba(234,108,10,0.1);
-  --accent-glow: rgba(234,108,10,0.25);
+  /* Borders */
+  --border:          rgba(0,0,0,0.08);
+  --border-2:        rgba(0,0,0,0.12);
 
-  --green:       #16a34a;
-  --green-dim:   rgba(22,163,74,0.12);
-  --amber:       #d97706;
-  --amber-dim:   rgba(217,119,6,0.12);
-  --red:         #dc2626;
-  --red-dim:     rgba(220,38,38,0.12);
-  --blue:        #2563eb;
-  --blue-dim:    rgba(37,99,235,0.12);
+  /* Primary (Azul) */
+  --primary:         #2563eb;
+  --primary-dim:     rgba(37,99,235,0.12);
+  --primary-muted:   rgba(37,99,235,0.08);
 
-  --shadow:      0 4px 24px rgba(0,0,0,0.08);
-  --shadow-lg:   0 8px 40px rgba(0,0,0,0.14);
+  /* Success (Verde) */
+  --success:         #059669;
+  --success-dim:     rgba(5,150,105,0.12);
+  --success-muted:   rgba(5,150,105,0.08);
+
+  /* Action (Laranja) */
+  --action:          #d97706;
+  --action-dim:      rgba(217,119,6,0.12);
+  --action-muted:    rgba(217,119,6,0.08);
+
+  /* Semantic Colors */
+  --warning:         #d97706;
+  --warning-dim:     rgba(217,119,6,0.12);
+  --danger:          #dc2626;
+  --danger-dim:      rgba(220,38,38,0.12);
+
+  /* Shadows */
+  --shadow:          0 4px 12px rgba(0,0,0,0.08);
+  --shadow-md:       0 8px 20px rgba(0,0,0,0.1);
+  --shadow-lg:       0 12px 32px rgba(0,0,0,0.12);
+
+  /* Legacy aliases for compatibility */
+  --accent:          var(--action);
+  --accent-dim:      var(--action-dim);
+  --accent-glow:     rgba(217,119,6,0.15);
+  --green:           var(--success);
+  --green-dim:       var(--success-dim);
+  --amber:           var(--warning);
+  --amber-dim:       var(--warning-dim);
+  --red:             var(--danger);
+  --red-dim:         var(--danger-dim);
+  --blue:            var(--primary);
+  --blue-dim:        var(--primary-dim);
 }
 
 /* ── Reset ───────────────────────────────────────────────────────────────────── */

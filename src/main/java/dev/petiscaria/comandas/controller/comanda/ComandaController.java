@@ -1,5 +1,6 @@
 package dev.petiscaria.comandas.controller.comanda;
 
+import dev.petiscaria.comandas.dto.itens.LancamentoLoteDTO;
 import dev.petiscaria.comandas.dto.pagamento.PagamentoItensDTO;
 import dev.petiscaria.comandas.dto.pagamento.PagamentoParcialDTO;
 import dev.petiscaria.comandas.models.comanda.Comanda;
@@ -33,14 +34,13 @@ public class ComandaController {
                 comandaService.iniciarAtendimento(mesaId, getUsuarioLogado(), nomeCliente));
     }
 
-    @PostMapping("/{comandaId}/itens")
+    @PostMapping("/{comandaId}/lancar-itens")
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
-    public ResponseEntity<Comanda> registrarConsumo(
+    public ResponseEntity<Comanda> lancarItensLote(
             @PathVariable Long comandaId,
-            @RequestParam Long produtoId,
-            @RequestBody ItemPedido item) {
+            @RequestBody LancamentoLoteDTO lote) {
         return ResponseEntity.ok(
-                comandaService.registrarConsumo(comandaId, produtoId, item, getUsuarioLogado()));
+                comandaService.registrarConsumoEmLote(comandaId, lote, getUsuarioLogado()));
     }
 
     @DeleteMapping("/{comandaId}/itens/{itemId}")

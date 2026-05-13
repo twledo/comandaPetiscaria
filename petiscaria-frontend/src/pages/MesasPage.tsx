@@ -123,7 +123,6 @@ export default function MesasPage() {
 
                 <div className={styles.actionsGroup}>
                     <div className={styles.searchWrapper}>
-                        <span className={styles.searchIcon}>🔍</span>
                         <input
                             type="text"
                             placeholder="Buscar mesa ou cliente..."
@@ -152,7 +151,7 @@ export default function MesasPage() {
                             <MesaCard
                                 key={mesa.id}
                                 mesa={mesa}
-                                statusLabel={getStatusLabel(mesa.status)} // <-- Passando o label limpo
+                                statusLabel={getStatusLabel(mesa.status)}
                                 onClick={() => setSelectedMesa(mesa)}
                             />
                         ))}

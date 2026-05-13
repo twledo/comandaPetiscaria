@@ -78,16 +78,20 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
         setError('');
 
         try {
-            for (const item of carrinho) {
-                await comandasApi.adicionarItem(comanda.id, item.produto.id, {
-                    quantidade: item.quantidade,
-                    meiaPorcao: item.meiaPorcao,
-                });
-            }
+            const itensParaEnviar = carrinho.map(item => ({
+                produtoId: item.produto.id,
+                quantidade: item.quantidade,
+                meiaPorcao: item.meiaPorcao || false
+            }));
+
+            const sla = await comandasApi.lancarItens(comanda.id, itensParaEnviar);
+            console.log(sla);
+
             await onRefresh();
             onClose();
         } catch (e: any) {
             setError(e.response?.data?.message || e.message || 'Erro ao lançar itens.');
+        } finally {
             setEnviando(false);
         }
     }

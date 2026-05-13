@@ -32,15 +32,16 @@ public class AuditoriaService {
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void registrarAcao(Comanda comanda, AcaoComanda acao, String detalhes, String usuario) {
-        salvarHistorico(comanda, acao, detalhes, usuario, null, null, null, null, null);
+        salvarHistorico(comanda, acao, detalhes, usuario, null, null, null, null, null, null);
     }
 
     // ─── 2. AÇÕES DE ITENS (Adição e Estorno) ───────────────────────────────────
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void registrarAcaoItem(Comanda comanda, AcaoComanda acao, String detalhes, String usuario,
+                                  String numeroPedido, // Adicionado para rastreio de lote
                                   Long produtoId, String nomeProduto, Integer quantidade, BigDecimal valorOperacao) {
-        salvarHistorico(comanda, acao, detalhes, usuario, valorOperacao, produtoId, nomeProduto, quantidade, null);
+        salvarHistorico(comanda, acao, detalhes, usuario, valorOperacao, produtoId, nomeProduto, quantidade, null, numeroPedido);
     }
 
     // ─── 3. AÇÕES DE PAGAMENTO (Parcial, Divisão, Total) ────────────────────────
@@ -48,14 +49,15 @@ public class AuditoriaService {
     @Transactional(propagation = Propagation.REQUIRED)
     public void registrarAcaoPagamento(Comanda comanda, AcaoComanda acao, String detalhes, String usuario,
                                        BigDecimal valorOperacao, MetodoPagamento metodoPagamento) {
-        salvarHistorico(comanda, acao, detalhes, usuario, valorOperacao, null, null, null, metodoPagamento);
+        salvarHistorico(comanda, acao, detalhes, usuario, valorOperacao, null, null, null, metodoPagamento, null);
     }
 
     // ─── MÉTODO BASE PRIVADO (Concentra a lógica de salvamento) ─────────────────
 
     private void salvarHistorico(Comanda comanda, AcaoComanda acao, String detalhes, String usuario,
                                  BigDecimal valorOperacao, Long produtoId, String nomeProduto,
-                                 Integer quantidade, MetodoPagamento metodoPagamento) {
+                                 Integer quantidade, MetodoPagamento metodoPagamento,
+                                 String numeroPedido) {
 
         BigDecimal valorMomento = comanda.getTotal() != null ? comanda.getTotal() : BigDecimal.ZERO;
 
@@ -66,12 +68,14 @@ public class AuditoriaService {
                 .usuario(usuario)
                 .valorMomento(valorMomento)
                 .dataEvento(LocalDateTime.now())
-                // Novos campos estruturados para relatórios BI:
                 .valorOperacao(valorOperacao)
                 .produtoId(produtoId)
                 .nomeProduto(nomeProduto)
                 .quantidade(quantidade)
                 .metodoPagamento(metodoPagamento)
+                // Implementação dos novos campos de auditoria:
+                .numeroPedido(numeroPedido)
+                .numeroMesa(comanda.getMesa() != null ? comanda.getMesa().getNumero() : null)
                 .build();
 
         historicoRepository.save(historico);
@@ -98,14 +102,12 @@ public class AuditoriaService {
                 .dataVenda(LocalDateTime.now())
                 .build();
 
-        // Extrai os itens blindando contra listas nulas (Null-Safety)
         List<VendaItem> itensVenda = Optional.ofNullable(comanda.getItens())
                 .orElse(List.of())
                 .stream()
                 .map(item -> {
                     BigDecimal totalItem = item.getTotalItem() != null ? item.getTotalItem() : BigDecimal.ZERO;
 
-                    // Previne divisão por zero caso a quantidade seja inválida no banco
                     BigDecimal unitarioEfetivo = item.getQuantidade() > 0
                             ? totalItem.divide(new BigDecimal(item.getQuantidade()), 2, RoundingMode.HALF_UP)
                             : BigDecimal.ZERO;

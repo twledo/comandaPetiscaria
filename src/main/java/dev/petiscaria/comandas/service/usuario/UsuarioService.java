@@ -36,20 +36,16 @@ public class UsuarioService {
 
     @Transactional
     public Usuario registrar(Usuario usuario) {
-        // 1. Validar se o usuário já existe pelo nome completo (opcional) ou se o ID gerado conflita
         String usernameGerado = gerarUsername(usuario.getNomeCompleto());
 
         if (repository.findByUsername(usernameGerado).isPresent()) {
             throw new RuntimeException("Este usuário já está cadastrado ou o ID gerado já existe.");
         }
 
-        // 2. Definir o username gerado (sempre em uppercase)
         usuario.setUsername(usernameGerado);
 
-        // 3. Criptografar a senha antes de salvar
         usuario.setSenha(passwordEncoder.encode(usuario.getSenha()));
 
-        // 4. Salvar no banco
         return repository.save(usuario);
     }
 

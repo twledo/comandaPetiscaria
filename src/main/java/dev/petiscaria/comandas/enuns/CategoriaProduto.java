@@ -6,19 +6,27 @@ import lombok.Getter;
 
 @Getter
 public enum CategoriaProduto {
-    ESPETINHO(1),
-    PORCOES(2),
-    BEBIDAS(3),
-    MINI_PIZZA(4),
-    LANCHE(5),
-    ACOMPANHAMENTO(6),
-    REFEICAO(7),
-    OUTROS(8);
+
+    // 1. Vai pra Churrasqueira
+    ESPETINHO(1, SetorPreparacao.ESPETINHO),
+
+    // 2. Vai tudo pra Cozinha
+    PORCOES(2, SetorPreparacao.COZINHA),
+    MINI_PIZZA(4, SetorPreparacao.COZINHA),
+    LANCHE(5, SetorPreparacao.COZINHA),
+    ACOMPANHAMENTO(6, SetorPreparacao.COZINHA),
+    REFEICAO(7, SetorPreparacao.COZINHA),
+    OUTROS(8, SetorPreparacao.COZINHA),
+
+    // 3. Vai pro Bar
+    BEBIDAS(3, SetorPreparacao.BEBIDAS);
 
     private final int id;
+    private final SetorPreparacao setor;
 
-    CategoriaProduto(int id) {
+    CategoriaProduto(int id, SetorPreparacao setor) {
         this.id = id;
+        this.setor = setor;
     }
 
     @JsonValue

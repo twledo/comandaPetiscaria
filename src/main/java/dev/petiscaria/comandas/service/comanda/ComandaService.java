@@ -1,11 +1,10 @@
 package dev.petiscaria.comandas.service.comanda;
 
+import dev.petiscaria.comandas.dto.itens.ItemPedidoDTO;
+import dev.petiscaria.comandas.dto.itens.LancamentoLoteDTO;
 import dev.petiscaria.comandas.dto.pagamento.PagamentoItensDTO;
 import dev.petiscaria.comandas.dto.pagamento.PagamentoParcialDTO;
-import dev.petiscaria.comandas.enuns.AcaoComanda;
-import dev.petiscaria.comandas.enuns.MetodoPagamento;
-import dev.petiscaria.comandas.enuns.StatusComanda;
-import dev.petiscaria.comandas.enuns.StatusMesa;
+import dev.petiscaria.comandas.enuns.*;
 import dev.petiscaria.comandas.models.comanda.Comanda;
 import dev.petiscaria.comandas.models.comanda.ComandaRecebimento;
 import dev.petiscaria.comandas.models.comanda.ItemPedido;
@@ -29,7 +28,8 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -50,7 +50,8 @@ public class ComandaService {
     public Comanda iniciarAtendimento(Long mesaId, String usuario, String nomeCliente) {
         boolean possuiAberta = comandaRepository.existsByMesaIdAndStatus(mesaId, StatusComanda.ABERTA);
         if (possuiAberta) throw new RuntimeException("Já existe um atendimento ativo para esta mesa!");
-        if (nomeCliente == null || nomeCliente.trim().isEmpty()) throw new RuntimeException("O nome do cliente é obrigatório.");
+        if (nomeCliente == null || nomeCliente.trim().isEmpty())
+            throw new RuntimeException("O nome do cliente é obrigatório.");
 
         Mesa mesa = mesaRepository.findById(mesaId).orElseThrow(() -> new RuntimeException("Mesa não encontrada."));
 
@@ -75,36 +76,141 @@ public class ComandaService {
         return comanda;
     }
 
+    /**
+     * Registra o consumo de múltiplos itens (Carrinho/Lote) de uma só vez.
+     * * <p><b>Regra de Negócio (Novo Modelo):</b></p>
+     * Em vez de agrupar ou somar quantidades no banco de dados, este método
+     * cria um identificador único ({@code numeroPedido}) para a "viagem" atual do garçom.
+     * Cada item do DTO será inserido como uma NOVA linha na tabela {@code itens_pedido},
+     * preservando o histórico cronológico de quando cada coisa foi pedida.
+     * * <p>Também é responsável por gerar a string de impressão (Ticket da Cozinha/Bar)
+     * contendo todos os itens agrupados neste lote.</p>
+     *
+     * @param comandaId O ID da comanda onde os itens serão lançados.
+     * @param lote      Objeto (DTO) contendo a lista de itens e suas quantidades.
+     * @param usuario   Nome do usuário (Garçom/Admin) que realizou o pedido.
+     * @return A {@link Comanda} atualizada com os novos itens e total recalculado.
+     * @throws RuntimeException se a comanda/produto não existir ou a mesa não estiver OCUPADA.
+     */
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
-    public Comanda registrarConsumo(Long comandaId, Long produtoId, ItemPedido dadosItem, String usuario) {
+    public Comanda registrarConsumoEmLote(Long comandaId, LancamentoLoteDTO lote, String usuario) {
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         garantirMesaOcupada(comanda.getMesa());
 
-        Produto produto = produtoRepository.findById(produtoId).orElseThrow(() -> new RuntimeException("Produto não encontrado."));
+        // Gera um identificador único para este pedido (ticket) da cozinha
+        String numeroPedido = "PED-" + System.currentTimeMillis();
 
-        comanda.getItens().stream()
-                .filter(item -> item.getProduto().getId().equals(produtoId) && item.isMeiaPorcao() == dadosItem.isMeiaPorcao() && Objects.equals(item.getObservacao(), dadosItem.getObservacao()))
-                .findFirst()
-                .ifPresentOrElse(
-                        item -> item.setQuantidade(item.getQuantidade() + dadosItem.getQuantidade()),
-                        () -> {
-                            dadosItem.setComanda(comanda);
-                            dadosItem.setProduto(produto);
-                            dadosItem.setNomeProduto(produto.getNome());
-                            dadosItem.setPrecoUnitario(produto.getPreco());
-                            comanda.getItens().add(dadosItem);
-                        }
-                );
+        // 1. Criamos uma lista temporária só para guardar os itens que vão ser impressos agora
+        List<ItemPedido> itensDestePedido = new ArrayList<>();
+
+        for (ItemPedidoDTO itemDto : lote.getItens()) {
+            Produto produto = produtoRepository.findById(itemDto.getProdutoId())
+                    .orElseThrow(() -> new RuntimeException("Produto não encontrado."));
+
+            // Sempre cria uma NOVA linha, garantindo o histórico separado por pedido
+            ItemPedido novoItem = new ItemPedido();
+            novoItem.setComanda(comanda);
+            novoItem.setProduto(produto);
+            novoItem.setNomeProduto(produto.getNome());
+            novoItem.setPrecoUnitario(produto.getPreco());
+            novoItem.setQuantidade(itemDto.getQuantidade().longValue());
+            novoItem.setMeiaPorcao(itemDto.getMeiaPorcao() != null && itemDto.getMeiaPorcao());
+            novoItem.setNumeroPedido(numeroPedido);
+
+            comanda.getItens().add(novoItem);
+
+            // Adicionamos na nossa lista temporária
+            itensDestePedido.add(novoItem);
+
+            String detalheLog = String.format("Lote [%s]: %d un. de '%s'.", numeroPedido, itemDto.getQuantidade(), produto.getNome());
+            auditoriaService.registrarAcaoItem(comanda, AcaoComanda.ITEM_ADICIONADO, detalheLog, usuario, numeroPedido, produto.getId(), produto.getNome(), itemDto.getQuantidade(), novoItem.getTotalItem());
+        }
+
+        // ==========================================================
+        // 🖨️ LÓGICA DE IMPRESSÃO (SEPARADA POR SETOR FÍSICO)
+        // ==========================================================
+
+        // MÁGICA: Agrupa a lista temporária usando o SETOR da Categoria do Produto
+        Map<SetorPreparacao, List<ItemPedido>> itensPorSetor = itensDestePedido.stream()
+                .collect(Collectors.groupingBy(item -> item.getProduto().getCategoria().getSetor()));
+
+        // Para cada Setor (Cozinha, Bar, etc), gera um Ticket diferente!
+        for (Map.Entry<SetorPreparacao, List<ItemPedido>> grupoSetor : itensPorSetor.entrySet()) {
+
+            StringBuilder ticket = new StringBuilder();
+            ticket.append("=================================");
+            ticket.append("\n    ").append(grupoSetor.getKey().getDescricao().toUpperCase()); // Ex: COZINHA
+            ticket.append("\n    MESA ").append(comanda.getMesa().getNumero());
+
+            if (comanda.getNomeCliente() != null && !comanda.getNomeCliente().trim().isEmpty()) {
+                ticket.append("\n    CLIENTE: ").append(comanda.getNomeCliente().toUpperCase());
+            }
+
+            ticket.append("\n    PEDIDO: ").append(numeroPedido);
+            ticket.append("\n=================================");
+
+            // Agora agrupa pelas categorias DENTRO desse setor (pra ficar organizado)
+            Map<CategoriaProduto, List<ItemPedido>> itensDaCategoria = grupoSetor.getValue().stream()
+                    .collect(Collectors.groupingBy(item -> item.getProduto().getCategoria()));
+
+            for (Map.Entry<CategoriaProduto, List<ItemPedido>> grupoCat : itensDaCategoria.entrySet()) {
+                String nomeCategoria = grupoCat.getKey().name().replace("_", " ");
+                ticket.append("\n\n--- ").append(nomeCategoria).append(" ---");
+
+                for (ItemPedido item : grupoCat.getValue()) {
+                    ticket.append(String.format("\n%dx %-15s %s",
+                            item.getQuantidade(),
+                            item.getNomeProduto(),
+                            item.isMeiaPorcao() ? "(MEIA)" : ""));
+                }
+            }
+
+            ticket.append("\n\n---------------------------------");
+            ticket.append("\nEnviado por: ").append(usuario);
+            ticket.append("\n=================================\n");
+            ticket.append("xxxxxxxxxxx Corte aqui xxxxxxxxxxx");
+
+            // Simula o envio para a impressora ESPECÍFICA daquele setor
+            System.out.println(ticket.toString());
+        }
 
         atualizarSaldoTotal(comanda);
-
-        String detalheLog = String.format("Lançamento: %d un. de '%s' %s(R$ %.2f/un).", dadosItem.getQuantidade(), produto.getNome(), dadosItem.isMeiaPorcao() ? "[Meia] " : "", dadosItem.getPrecoUnitario());
-        auditoriaService.registrarAcaoItem(comanda, AcaoComanda.ITEM_ADICIONADO, detalheLog, usuario, produto.getId(), produto.getNome(), dadosItem.getQuantidade().intValue(), dadosItem.getTotalItem());
-
         notificarMudancaMesas();
+
         return comandaRepository.save(comanda);
     }
+
+    /**
+     * Registra o consumo de um item individual de forma rápida.
+     * * <p><b>Design Pattern:</b></p>
+     * Este método atua como um "Adapter" (Adaptador). Para evitar duplicação
+     * de regras de negócio (DRY), ele empacota o item único dentro de um
+     * {@link LancamentoLoteDTO} e delega o processamento real para o método
+     * {@link #registrarConsumoEmLote}.
+     *
+     * @param comandaId O ID da comanda.
+     * @param produtoId O ID do produto sendo adicionado.
+     * @param dadosItem Objeto contendo quantidade, meiaPorção e observações.
+     * @param usuario   Nome do usuário logado.
+     * @return A {@link Comanda} atualizada.
+     */
+//    @Transactional
+//    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
+//    public Comanda registrarConsumo(Long comandaId, Long produtoId, ItemPedido dadosItem, String usuario) {
+//
+//        // Empacota o item unitário no DTO para usar o método do carrinho
+//        ItemPedidoDTO itemDto = new ItemPedidoDTO();
+//        itemDto.setProdutoId(produtoId);
+//        itemDto.setQuantidade(dadosItem.getQuantidade().intValue());
+//        itemDto.setMeiaPorcao(dadosItem.isMeiaPorcao());
+//
+//        LancamentoLoteDTO lote = new LancamentoLoteDTO();
+//        lote.setItens(List.of(itemDto));
+//
+//        // Repassa para o método principal que trata a impressão e salvamento
+//        return registrarConsumoEmLote(comandaId, lote, usuario);
+//    }
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
@@ -129,8 +235,7 @@ public class ComandaService {
         }
 
         atualizarSaldoTotal(comanda);
-        auditoriaService.registrarAcaoItem(comanda, AcaoComanda.ITEM_REMOVIDO, detalheLog, usuario, item.getProduto().getId(), item.getNomeProduto(), 1, valorUnitarioEstornado);
-
+        auditoriaService.registrarAcaoItem(comanda, AcaoComanda.ITEM_REMOVIDO, detalheLog, usuario, item.getNumeroPedido(), item.getProduto().getId(), item.getNomeProduto(), 1, valorUnitarioEstornado);
         notificarMudancaMesas();
         return comandaRepository.save(comanda);
     }
@@ -141,7 +246,8 @@ public class ComandaService {
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         Mesa mesa = comanda.getMesa();
 
-        if (mesa.getStatus() != StatusMesa.AGUARDANDO_PAGAMENTO) throw new IllegalStateException("Apenas mesas em 'Aguardando Pagamento' podem ser reabertas.");
+        if (mesa.getStatus() != StatusMesa.AGUARDANDO_PAGAMENTO)
+            throw new IllegalStateException("Apenas mesas em 'Aguardando Pagamento' podem ser reabertas.");
 
         comanda.setStatus(StatusComanda.ABERTA);
         mesa.setStatus(StatusMesa.OCUPADA);
@@ -158,7 +264,8 @@ public class ComandaService {
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         Mesa mesa = comanda.getMesa();
 
-        if (mesa.getStatus() != StatusMesa.OCUPADA) throw new IllegalStateException("A mesa precisa estar ocupada para solicitar o fechamento.");
+        if (mesa.getStatus() != StatusMesa.OCUPADA)
+            throw new IllegalStateException("A mesa precisa estar ocupada para solicitar o fechamento.");
 
         mesa.setStatus(StatusMesa.AGUARDANDO_PAGAMENTO);
         comanda.setStatus(StatusComanda.AGUARDANDO_PAGAMENTO);
@@ -174,7 +281,8 @@ public class ComandaService {
     public Comanda pagarItensEspecificos(Long comandaId, List<PagamentoItensDTO.ItemSelecionado> itensSelecionados, MetodoPagamento metodo, String usuario) {
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
 
-        if (itensSelecionados == null || itensSelecionados.isEmpty()) throw new RuntimeException("Nenhum item selecionado para pagamento.");
+        if (itensSelecionados == null || itensSelecionados.isEmpty())
+            throw new RuntimeException("Nenhum item selecionado para pagamento.");
 
         BigDecimal totalPagoAgora = BigDecimal.ZERO;
         List<String> detalhesDescritivos = new ArrayList<>();
@@ -236,7 +344,8 @@ public class ComandaService {
 
         switch (dto.modalidade()) {
             case IGUALITARIO -> {
-                if (dto.numeroPessoas() == null || dto.numeroPessoas() < 2) throw new IllegalArgumentException("Pelo menos 2 pessoas.");
+                if (dto.numeroPessoas() == null || dto.numeroPessoas() < 2)
+                    throw new IllegalArgumentException("Pelo menos 2 pessoas.");
                 BigDecimal valorPorPessoa = comanda.getTotal().divide(new BigDecimal(dto.numeroPessoas()), 2, RoundingMode.HALF_UP);
                 for (int i = 1; i <= dto.numeroPessoas(); i++) {
                     novosRecebimentos.add(ComandaRecebimento.builder().comanda(comanda).valor(valorPorPessoa).metodoPagamento(dto.metodoPagamento()).dataRecebimento(LocalDateTime.now()).usuario(usuario).observacao(String.format("Divisão Igual - Pessoa %d", i)).build());
@@ -244,7 +353,8 @@ public class ComandaService {
                 detalheAuditoria = String.format("Divisão Igualitária: %d pessoas, R$ %.2f cada via %s.", dto.numeroPessoas(), valorPorPessoa, dto.metodoPagamento().getDescricao());
             }
             case VALOR_LIVRE -> {
-                if (dto.parcelas() == null || dto.parcelas().isEmpty()) throw new IllegalArgumentException("Informe as parcelas.");
+                if (dto.parcelas() == null || dto.parcelas().isEmpty())
+                    throw new IllegalArgumentException("Informe as parcelas.");
                 BigDecimal somaInformada = dto.parcelas().stream().map(PagamentoParcialDTO.ParcelaPessoa::valor).reduce(BigDecimal.ZERO, BigDecimal::add);
                 if (somaInformada.subtract(comanda.getTotal()).abs().compareTo(new BigDecimal("0.02")) > 0) {
                     throw new IllegalArgumentException(String.format("Soma (R$ %.2f) não bate com total (R$ %.2f).", somaInformada, comanda.getTotal()));
@@ -277,7 +387,8 @@ public class ComandaService {
     public void finalizarAtendimento(Long comandaId, String usuarioCaixa) {
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         Mesa mesa = comanda.getMesa();
-        if (mesa.getStatus() != StatusMesa.AGUARDANDO_PAGAMENTO) throw new IllegalStateException("Mesa precisa estar em conferência.");
+        if (mesa.getStatus() != StatusMesa.AGUARDANDO_PAGAMENTO)
+            throw new IllegalStateException("Mesa precisa estar em conferência.");
 
         auditoriaService.salvarSnapshotVenda(comanda, usuarioCaixa);
         ComandaRecebimento recebimento = ComandaRecebimento.builder().comanda(comanda).valor(comanda.getTotal()).usuario(usuarioCaixa).observacao("Pgto Integral Caixa").build();
@@ -293,7 +404,8 @@ public class ComandaService {
     }
 
     private void garantirMesaOcupada(Mesa mesa) {
-        if (mesa.getStatus() != StatusMesa.OCUPADA) throw new IllegalStateException("A mesa não está em estado de lançamento. Reabra a comanda para alterar itens.");
+        if (mesa.getStatus() != StatusMesa.OCUPADA)
+            throw new IllegalStateException("A mesa não está em estado de lançamento. Reabra a comanda para alterar itens.");
     }
 
     private void atualizarSaldoTotal(Comanda comanda) {

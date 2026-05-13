@@ -22,8 +22,6 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = "mesa") // ESSENCIAL: Não deixa a comanda printar a mesa
-@EqualsAndHashCode(exclude = "mesa") // ESSENCIAL
 public class Comanda {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

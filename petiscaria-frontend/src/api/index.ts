@@ -1,4 +1,4 @@
-import type {AuthUser, Comanda, LoginResponse, Mesa, PageResponse, Produto} from '../types';
+import type { AuthUser, Comanda, LoginResponse, Mesa, PageResponse, Produto } from '../types';
 
 const BASE_URL = 'http://192.168.100.184:8080';
 
@@ -23,7 +23,7 @@ async function request<T>(
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(`${BASE_URL}${path}`, {...options, headers});
+    const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
     if (!res.ok) {
         const text = await res.text().catch(() => 'Erro desconhecido');
         throw new Error(text || `HTTP ${res.status}`);
@@ -39,7 +39,7 @@ export const authApi = {
     login: (username: string, senha: string) =>
         request<LoginResponse>('/api/auth/login', {
             method: 'POST',
-            body: JSON.stringify({username, senha}),
+            body: JSON.stringify({ username, senha }),
         }),
 };
 
@@ -72,17 +72,17 @@ export const comandasApi = {
     abrir: (mesaId: number, nomeCliente: string) =>
         request<Comanda>(
             `/api/comandas/abrir/${mesaId}?nomeCliente=${encodeURIComponent(nomeCliente)}`,
-            {method: 'POST'}
+            { method: 'POST' }
         ),
 
-    adicionarItem: (
+    // 🚀 NOVO: Lançamento em Lote (Carrinho) -> Gera o Ticket Agrupado na Cozinha!
+    lancarItens: (
         comandaId: number,
-        produtoId: number,
-        item: { quantidade: number; meiaPorcao: boolean; observacao?: string }
+        itensParaEnviar: Array<{ produtoId: number; quantidade: number; meiaPorcao: boolean; observacao?: string }>
     ) =>
-        request<Comanda>(`/api/comandas/${comandaId}/itens?produtoId=${produtoId}`, {
+        request<Comanda>(`/api/comandas/${comandaId}/lancar-itens`, {
             method: 'POST',
-            body: JSON.stringify(item),
+            body: JSON.stringify({ itens: itensParaEnviar }), // Empacota no DTO LancamentoLoteDTO
         }),
 
     estornarItem: (comandaId: number, itemId: number) =>
@@ -91,13 +91,13 @@ export const comandasApi = {
         }),
 
     fechar: (comandaId: number) =>
-        request<Comanda>(`/api/comandas/${comandaId}/fechar`, {method: 'PATCH'}),
+        request<Comanda>(`/api/comandas/${comandaId}/fechar`, { method: 'PATCH' }),
 
     reabrir: (comandaId: number) =>
-        request<Comanda>(`/api/comandas/${comandaId}/reabrir`, {method: 'PATCH'}),
+        request<Comanda>(`/api/comandas/${comandaId}/reabrir`, { method: 'PATCH' }),
 
     finalizar: (comandaId: number) =>
-        request<void>(`/api/comandas/${comandaId}/recebimento`, {method: 'POST'}),
+        request<void>(`/api/comandas/${comandaId}/recebimento`, { method: 'POST' }),
 
     pagarItens: (comandaId: number, dados: {
         itens: Array<{ itemId: number; quantidadePagar: number }>;

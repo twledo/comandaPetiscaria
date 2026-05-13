@@ -125,7 +125,7 @@
 
 /* Input de Busca - Resolvendo problema de visibilidade */
 .searchInput {
-  padding: 0.6rem 1rem 0.6rem 2.5rem; /* Espaço para o ícone */
+  padding: 0.6rem 1rem 0.6rem; /* Espaço para o ícone */
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-2); /* Fundo escuro para combinar com o tema */

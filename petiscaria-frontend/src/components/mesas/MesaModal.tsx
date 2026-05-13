@@ -1,7 +1,7 @@
-import {useState} from 'react';
-import {comandasApi} from '../../api';
-import {useAuth} from '../../contexts/AuthContext';
-import type {Mesa} from '../../types';
+import { useState, useMemo } from 'react';
+import { comandasApi } from '../../api';
+import { useAuth } from '../../contexts/AuthContext';
+import type { Mesa } from '../../types';
 import LancarItensModal from '../comandas/LancarItensModal';
 import DivisaoContaModal from '../comandas/divisao/DivisaoContaModal';
 import styles from './MesaModal.module.css';
@@ -13,8 +13,8 @@ interface Props {
     onRefresh: () => Promise<void>;
 }
 
-export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props) {
-    const {isAdmin} = useAuth();
+export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Props) {
+    const { isAdmin } = useAuth();
     const [nomeCliente, setNomeCliente] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -36,6 +36,7 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
         }
     }
 
+    // ── Renderização Condicional: Lançar Itens ──
     if (showLancar && comanda) {
         return (
             <LancarItensModal
@@ -47,20 +48,22 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
         );
     }
 
+    // ── Renderização Condicional: Divisão de Conta ──
+    // FIXED: Now properly returning the component and using onRefresh
     if (showDivisao && comanda) {
         return (
             <DivisaoContaModal
                 comanda={comanda}
-                onClose={() => setShowDivisao(false)} // Se só fechar pelo "X", fecha apenas a divisão
-                onSuccess={async () => {
-                    setShowDivisao(false); // Esconde a divisão
-                    onClose();             // <-- A MÁGICA AQUI: Fecha o modal da mesa inteiro!
-                    onRefresh();     // Atualiza o mapa no fundo
+                onClose={() => setShowDivisao(false)}
+                onSuccess={() => {
+                    // Update global data. The modal will decide whether to close or stay open.
+                    onRefresh();
                 }}
             />
         );
     }
 
+    // ── Renderização Principal da Mesa ──
     return (
         <div className={styles.backdrop} onClick={e => e.target === e.currentTarget && onClose()}>
             <div className={`${styles.modal} animate-scale`}>
@@ -68,7 +71,8 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
                 <div className={styles.header}>
                     <div>
                         <h2 className={styles.title}>Mesa {mesa.numero}</h2>
-                        <StatusBadge status={mesa.status} label={statusLabel} /></div>
+                        <StatusBadge status={mesa.status} label={statusLabel} />
+                    </div>
                     <button className={styles.closeBtn} onClick={onClose}>✕</button>
                 </div>
 
@@ -77,8 +81,8 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
                     {/* ── DISPONIVEL ─────────────────────────────── */}
                     {mesa.status === 'DISPONIVEL' && (
                         <div className={styles.section}>
-                            <div style={{marginBottom: '0.5rem'}}>
-                                <h3 style={{color: 'var(--text)', marginBottom: '4px'}}>Novo Atendimento</h3>
+                            <div style={{ marginBottom: '0.5rem' }}>
+                                <h3 style={{ color: 'var(--text)', marginBottom: '4px' }}>Novo Atendimento</h3>
                                 <p className={styles.description}>Identifique o cliente para iniciar:</p>
                             </div>
 
@@ -97,7 +101,7 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
                                 onClick={() => exec(() => comandasApi.abrir(mesa.id, nomeCliente))}
                                 disabled={loading || !nomeCliente.trim()}
                             >
-                                {loading ? <Spinner/> : '▶ Abrir Mesa e Iniciar'}
+                                {loading ? <Spinner /> : '▶ Abrir Mesa e Iniciar'}
                             </button>
                         </div>
                     )}
@@ -105,7 +109,7 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
                     {/* ── OCUPADA ────────────────────────────────── */}
                     {mesa.status === 'OCUPADA' && comanda && (
                         <>
-                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh}/>
+                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh} />
 
                             <div className={styles.actions}>
                                 <button
@@ -120,7 +124,7 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
                                     onClick={() => exec(() => comandasApi.fechar(comanda.id))}
                                     disabled={loading}
                                 >
-                                    {loading ? <Spinner/> : '✓ Pedir Conta'}
+                                    {loading ? <Spinner /> : '✓ Pedir Conta'}
                                 </button>
                             </div>
                         </>
@@ -129,7 +133,7 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
                     {/* ── AGUARDANDO_PAGAMENTO ───────────────────── */}
                     {mesa.status === 'AGUARDANDO_PAGAMENTO' && comanda && (
                         <>
-                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh}/>
+                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh} />
 
                             <div className={styles.totalBox}>
                                 <span>Total a Receber</span>
@@ -144,8 +148,7 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
                                         className={`${styles.btn} ${styles.btnPrimary}`}
                                         onClick={() => setShowDivisao(true)}
                                         disabled={loading}
-                                    >
-                                        💰 Pagar / Dividir Conta
+                                    >Pagamento
                                     </button>
 
                                     <button
@@ -182,7 +185,7 @@ function ComandaResumo({
     mesa: Mesa,
     onRefresh: () => Promise<void>
 }) {
-    const {isAdmin} = useAuth();
+    const { isAdmin } = useAuth();
     const [estornando, setEstornando] = useState<number | null>(null);
     const [erroLocal, setErroLocal] = useState<string | null>(null);
 
@@ -201,6 +204,30 @@ function ComandaResumo({
         }
     }
 
+    // Agrupando itens iguais para a visualização
+    const itensAgrupados = useMemo(() => {
+        const mapa = new Map();
+
+        comanda.itens.forEach(item => {
+            const key = `${item.nomeProduto}-${item.meiaPorcao}`;
+
+            if (!mapa.has(key)) {
+                mapa.set(key, {
+                    ...item,
+                    totalAgrupado: Number(item.totalItem),
+                    ids: [item.id]
+                });
+            } else {
+                const existente = mapa.get(key);
+                existente.quantidade += item.quantidade;
+                existente.totalAgrupado += Number(item.totalItem);
+                existente.ids.push(item.id);
+            }
+        });
+
+        return Array.from(mapa.values());
+    }, [comanda.itens]);
+
     return (
         <div className={styles.itensSection}>
             <div className={styles.itensHeader}>
@@ -212,42 +239,46 @@ function ComandaResumo({
                         </span>
                     )}
                 </div>
-                <span className={styles.itensCount}>{comanda.itens.length} itens</span>
+                <span className={styles.itensCount}>{comanda.itens.length} lançamentos</span>
             </div>
 
             {erroLocal && <p className={styles.errorInline}
-                             style={{color: 'red', fontSize: '0.85rem', marginBottom: '8px'}}>{erroLocal}</p>}
+                             style={{ color: 'red', fontSize: '0.85rem', marginBottom: '8px' }}>{erroLocal}</p>}
 
-            {comanda.itens.length === 0 ? (
+            {itensAgrupados.length === 0 ? (
                 <p className={styles.emptyItens}>Nenhum item lançado ainda.</p>
             ) : (
                 <ul className={styles.itensList}>
-                    {comanda.itens.map(item => (
-                        <li key={item.id} className={styles.itemRow}>
-                            <div className={styles.itemInfo}>
-                                <span className={styles.itemNome}>
-                                    {item.nomeProduto}
-                                    {item.meiaPorcao && <span className={styles.meiaTag}>½</span>}
-                                </span>
-                                <span className={styles.itemQtd}>x{item.quantidade}</span>
-                            </div>
-                            <div className={styles.itemRight}>
-                                <span className={styles.itemTotal}>
-                                    R$ {Number(item.totalItem).toFixed(2).replace('.', ',')}
-                                </span>
-                                { mesa.status === 'OCUPADA' && (
-                                    <button
-                                        className={styles.estornoBtn}
-                                        onClick={() => estornar(item.id)}
-                                        disabled={estornando === item.id}
-                                        title="Estornar item"
-                                    >
-                                        {estornando === item.id ? '…' : (item.quantidade > 1 ? '−' : '✕')}
-                                    </button>
-                                )}
-                            </div>
-                        </li>
-                    ))}
+                    {itensAgrupados.map(grupo => {
+                        const ultimoId = grupo.ids[grupo.ids.length - 1];
+
+                        return (
+                            <li key={grupo.ids[0]} className={styles.itemRow}>
+                                <div className={styles.itemInfo}>
+                                    <span className={styles.itemNome}>
+                                        {grupo.nomeProduto}
+                                        {grupo.meiaPorcao && <span className={styles.meiaTag}>½</span>}
+                                    </span>
+                                    <span className={styles.itemQtd}>x{grupo.quantidade}</span>
+                                </div>
+                                <div className={styles.itemRight}>
+                                    <span className={styles.itemTotal}>
+                                        R$ {grupo.totalAgrupado.toFixed(2).replace('.', ',')}
+                                    </span>
+                                    {mesa.status === 'OCUPADA' && (
+                                        <button
+                                            className={styles.estornoBtn}
+                                            onClick={() => estornar(ultimoId)}
+                                            disabled={estornando === ultimoId}
+                                            title="Estornar item"
+                                        >
+                                            {estornando === ultimoId ? '…' : (grupo.quantidade > 1 ? '−' : '✕')}
+                                        </button>
+                                    )}
+                                </div>
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
 
@@ -268,5 +299,5 @@ function StatusBadge({ status, label }: { status: string, label: string }) {
 }
 
 function Spinner() {
-    return <span className={styles.spinner}/>;
+    return <span className={styles.spinner} />;
 }
