@@ -1,7 +1,8 @@
 package dev.petiscaria.comandas.models.comanda;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.petiscaria.comandas.models.pedido.Pedido;
 import dev.petiscaria.comandas.models.produto.Produto;
 import jakarta.persistence.*;
 import lombok.*;
@@ -20,22 +21,24 @@ public class ItemPedido {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // NOVO: Relacionamento com a classe Pedido (Substitui o vínculo direto com a Comanda)
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "comanda_id")
-    @JsonIgnore
-    private Comanda comanda;
+    @JoinColumn(name = "pedido_id", nullable = false)
+    @JsonIgnoreProperties({"itens", "comanda"}) // Evita loop infinito no JSON do Jackson
+    private Pedido pedido;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "produto_id")
     private Produto produto;
 
-    private String numeroPedido;
+    @Column(nullable = false)
+    private boolean entregue = false;
+
     private String nomeProduto; // Snapshot: Nome no momento da compra
     private Long quantidade;
     private BigDecimal precoUnitario; // Snapshot: Preço no momento da compra
     private String observacao;
     private boolean meiaPorcao = false;
-
 
     @JsonProperty("totalItem") // Aparecerá no seu JSON do Frontend
     public BigDecimal getTotalItem() {

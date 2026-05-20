@@ -1,4 +1,6 @@
-/* Layout Principal */
+/* ==========================================================================
+   LAYOUT PRINCIPAL
+   ========================================================================== */
 .page {
   display: flex;
   flex-direction: column;
@@ -7,70 +9,99 @@
   margin: 0 auto;
   padding: 1.5rem;
   min-height: 100vh;
-  background: var(--bg); /* Garante que herda o fundo do tema */
+  background: var(--bg);
 }
+/* ==========================================================================
+   HEADER DE RESUMO (STATS PREMIUM ALINHADO AOS CARDS)
+   ========================================================================== */
 
-/* Header de Resumo (Stats) */
+/* Definição de Variáveis de Status */
+.summaryCard.disponivel  { --status-color: var(--text-3); --status-dim: rgba(113, 113, 122, 0.1); }
+.summaryCard.ocupada     { --status-color: var(--primary); --status-dim: var(--primary-dim); }
+.summaryCard.aguardando  { --status-color: var(--warning); --status-dim: var(--warning-dim); }
+
 .summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .summaryCard {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1.5rem;
+  border: 2px solid transparent; /* Borda transparente inicial para não "pular" */
+  border-radius: 24px;
+  padding: 1.5rem 1rem;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
-  transition: all 0.2s ease;
+  justify-content: center;
+  gap: 0.25rem;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
 }
 
-/* Indicador lateral sutil em vez de borda grossa */
+/* Efeito de "Luz de Fundo" (Glow sutil) */
+.summaryCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at top right, var(--status-dim), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none; /* Garante que não bloqueie o clique */
+}
+
+/* Estado de Hover (Sem sombra, apenas destaque de borda e escala) */
+.summaryCard:hover {
+  transform: translateY(-6px) scale(1.01);
+  border-color: var(--status-color);
+}
+
+.summaryCard:hover::before { opacity: 1; }
+
+/* Barra inferior (Assinatura do status) */
 .summaryCard::after {
   content: '';
   position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 5px;
+  bottom: 0; left: 30%; right: 30%;
+  height: 4px;
+  background: var(--status-color);
+  border-radius: 4px 4px 0 0;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.summaryCard.green::after  { background: #10b981; }
-.summaryCard.orange::after { background: #ff832b; }
-.summaryCard.amber::after  { background: #f59e0b; }
-
-.summaryCard:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--text-2);
+.summaryCard:hover::after {
+  left: 10%; right: 10%;
+  height: 6px;
 }
 
+/* Tipografia de Dados (Número agora assume a cor do status) */
 .summaryNum {
-  font-size: 2.5rem;
-  font-weight: 900;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 3.2rem;
+  font-weight: 800;
+  color: var(--status-color); /* Integrado com a cor do status */
   line-height: 1;
   letter-spacing: -0.02em;
 }
 
-.summaryCard.green .summaryNum  { color: #10b981; }
-.summaryCard.orange .summaryNum { color: #f97316; }
-.summaryCard.amber .summaryNum  { color: #f59e0b; }
-
 .summaryLabel {
-  font-size: 0.9rem;
-  color: var(--text-2);
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.15em;
+  color: var(--text-3);
+  margin-top: 0.25rem;
 }
 
-/* Barra de Navegação e Filtros (Toolbar) */
+/* ==========================================================================
+   TOOLBAR E FILTROS
+   ========================================================================== */
 .filters {
   display: flex;
-  justify-content: space-between; /* Este cara empurra os grupos para as pontas */
+  justify-content: space-between;
   align-items: center;
   gap: 1rem;
   background: var(--surface);
@@ -85,12 +116,6 @@
   gap: 0.5rem;
 }
 
-.actionsGroup {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
 .filterBtn {
   padding: 0.5rem 1rem;
   border-radius: 8px;
@@ -101,20 +126,9 @@
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
-}
-
-.searchWrapper {
-  position: relative;
   display: flex;
   align-items: center;
-}
-
-.searchIcon {
-  position: absolute;
-  left: 12px;
-  font-size: 0.9rem;
-  opacity: 0.5;
-  pointer-events: none;
+  justify-content: center;
 }
 
 .filterBtn.active {
@@ -123,13 +137,24 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* Input de Busca - Resolvendo problema de visibilidade */
+.actionsGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.searchWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .searchInput {
-  padding: 0.6rem 1rem 0.6rem; /* Espaço para o ícone */
+  padding: 0.6rem 1rem;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--bg-2); /* Fundo escuro para combinar com o tema */
-  color: var(--text);      /* Texto claro no modo escuro */
+  background: var(--bg-2);
+  color: var(--text);
   font-size: 0.9rem;
   width: 250px;
   transition: all 0.2s;
@@ -138,7 +163,7 @@
 .searchInput:focus {
   outline: none;
   border-color: var(--accent);
-  width: 300px; /* Efeito de expansão ao clicar */
+  width: 300px;
   background: var(--surface);
 }
 
@@ -147,7 +172,6 @@
   opacity: 0.5;
 }
 
-/* Botão de Atualizar */
 .refreshBtn {
   background: var(--bg-2);
   border: 1px solid var(--border);
@@ -170,18 +194,19 @@
   transform: rotate(180deg);
 }
 
-/* Grid de Mesas */
+/* ==========================================================================
+   GRID DE MESAS E ESTADOS
+   ========================================================================== */
 .content {
   flex: 1;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 1.5rem;
 }
 
-/* Estados de carregamento e vazio */
 .loading, .empty {
   display: flex;
   flex-direction: column;
@@ -205,17 +230,101 @@
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 900px) {
+/* ==========================================================================
+   RESPONSIVIDADE (MOBILE FIRST / ADJUSTMENTS)
+   ========================================================================== */
+@media (max-width: 768px) {
+  .page {
+    padding: 0.75rem;
+    gap: 1rem;
+  }
+
+  /* 1. Stats Compactos e Centralizados */
+  .summary {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .summaryCard {
+    padding: 0.75rem 0.25rem;
+    min-height: 80px;
+    border-radius: 16px;
+  }
+
+  /* Linha indicadora vai para o topo no mobile */
+  .summaryCard::after {
+    width: 100%;
+    height: 3px;
+    bottom: auto;
+  }
+
+  .summaryNum { font-size: 1.6rem; }
+  .summaryLabel { font-size: 0.6rem; }
+
+  /* 2. Toolbar Mobile */
   .filters {
     flex-direction: column;
     align-items: stretch;
+    background: transparent;
+    border: none;
+    padding: 0;
+    gap: 1rem;
   }
 
-  .actionsGroup {
-    justify-content: space-between;
-  }
-
-  .searchInput {
+  /* 3. Filtros Centralizados e Abreviados */
+  .filterGroup {
+    display: flex;
+    justify-content: center; /* Centraliza a linha de filtros */
+    gap: 6px;
     width: 100%;
+    overflow-x: auto;
+    padding: 4px 0;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
+  .filterGroup::-webkit-scrollbar { display: none; }
+
+  .filterBtn {
+    flex: 1; /* Faz os botões ocuparem espaço igual */
+    max-width: 90px; /* Impede que fiquem muito largos em telas médias */
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 0.6rem 0.2rem;
+  }
+
+  /* Mágica da Abreviação via data-short */
+  .filterBtn span { display: none; }
+  .filterBtn::after {
+    content: attr(data-short);
+    font-size: 0.75rem;
+    display: block;
+  }
+
+  /* 4. Busca ocupando a largura total */
+  .actionsGroup {
+    width: 100%;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .searchWrapper { flex: 1; }
+  .searchInput {
+    width: 100% !important;
+    height: 44px;
+    font-size: 0.8rem;
+  }
+
+  /* 5. Grid de Mesas Mobile (2 colunas) */
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.8rem;
+  }
+}
+
+/* Ajuste fino para telas MUITO pequenas */
+@media (max-width: 380px) {
+  .summaryLabel { display: none; }
+  .summaryCard { min-height: 60px; }
+  .filterBtn::after { font-size: 0.65rem; }
 }

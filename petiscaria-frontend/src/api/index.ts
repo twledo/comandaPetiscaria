@@ -1,6 +1,6 @@
 import type { AuthUser, Comanda, LoginResponse, Mesa, PageResponse, Produto } from '../types';
 
-const BASE_URL = 'http://192.168.100.184:8080';
+const BASE_URL = 'http://localhost:8080';
 
 function getToken(): string | null {
     const raw = localStorage.getItem('petiscaria_auth');
@@ -47,6 +47,20 @@ export const authApi = {
 export const mesasApi = {
     listarTodas: () => request<Mesa[]>('/api/mesas'),
     listarDisponiveis: () => request<Mesa[]>('/api/mesas/disponiveis'),
+};
+
+// ── Pedidos ──────────────────────────────────────────────────────────────────
+// Adicione isto no seu arquivo api.ts
+// ── Pedidos ──────────────────────────────────────────────────────────────────
+export const pedidosApi = {
+    entregar: (id: number) =>
+        request<void>(`/api/pedidos/${id}/entregar`, { method: 'PATCH' }),
+
+    entregarItem: (itemId: number) =>
+        request<void>(`/api/pedidos/item/${itemId}/entregar`, { method: 'PATCH' }),
+
+    cancelar: (id: number) =>
+        request<void>(`/api/pedidos/${id}/cancelar`, { method: 'PATCH' }),
 };
 
 // ── Enuns ──────────────────────────────────────────────────────────────────

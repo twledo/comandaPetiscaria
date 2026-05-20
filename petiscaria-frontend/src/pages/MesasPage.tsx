@@ -86,15 +86,17 @@ export default function MesasPage() {
     return (
         <div className={styles.page}>
             <header className={styles.summary}>
-                <div className={`${styles.summaryCard} ${styles.green}`}>
+                <div className={`${styles.summaryCard} ${styles.disponivel}`}>
                     <span className={styles.summaryNum}>{counts.DISPONIVEL}</span>
                     <span className={styles.summaryLabel}>Disponíveis</span>
                 </div>
-                <div className={`${styles.summaryCard} ${styles.orange}`}>
+
+                <div className={`${styles.summaryCard} ${styles.ocupada}`}>
                     <span className={styles.summaryNum}>{counts.OCUPADA}</span>
                     <span className={styles.summaryLabel}>Ocupadas</span>
                 </div>
-                <div className={`${styles.summaryCard} ${styles.amber}`}>
+
+                <div className={`${styles.summaryCard} ${styles.aguardando}`}>
                     <span className={styles.summaryNum}>{counts.AGUARDANDO_PAGAMENTO}</span>
                     <span className={styles.summaryLabel}>Aguard. Pgto</span>
                 </div>
@@ -106,8 +108,9 @@ export default function MesasPage() {
                     <button
                         className={`${styles.filterBtn} ${filtro === 'TODAS' ? styles.active : ''}`}
                         onClick={() => setFiltro('TODAS')}
-                    >
-                        Todas
+                        data-full="Todas"
+                        data-short="Todas"
+                    > <span>Todas</span>
                     </button>
                     {/* Filtros Dinâmicos */}
                     {statusOpcoes.map(f => (
@@ -115,8 +118,14 @@ export default function MesasPage() {
                             key={f.value}
                             className={`${styles.filterBtn} ${filtro === f.value ? styles.active : ''}`}
                             onClick={() => setFiltro(f.value as StatusMesa)}
+                            // Passamos o label do banco e uma versão curta via data-attribute
+                            data-full={f.label}
+                            data-short={
+                                f.value === 'AGUARDANDO_PAGAMENTO' ? 'Aguar. Pgt.' :        
+                                    f.label.substring(0, 5) + '.'
+                            }
                         >
-                            {f.label}
+                            <span>{f.label}</span>
                         </button>
                     ))}
                 </div>

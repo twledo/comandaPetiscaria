@@ -26,7 +26,6 @@ export default function AppLayout({ children, activePage, onNavigate }: Props) {
             {/* Sidebar */}
             <aside className={`${styles.sidebar} ${sidebarOpen ? styles.open : ''}`}>
                 <div className={styles.sidebarHeader}>
-                    <span className={styles.sidebarLogo}>🍻</span>
                     <span className={styles.sidebarBrand}>Petiscaria</span>
                 </div>
 

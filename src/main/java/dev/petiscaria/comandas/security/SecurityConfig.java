@@ -59,7 +59,14 @@ public class SecurityConfig {
 
                     req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/login").permitAll();
 
-                    req.requestMatchers(HttpMethod.POST, "/api/auth/registrar").hasRole(TipoUsuario.ADMIN.name());
+                    req.requestMatchers(HttpMethod.POST, "/api/auth/registrar")
+                            .hasRole(TipoUsuario.ADMIN.name());
+
+                    req.requestMatchers(HttpMethod.POST, "/api/pedidos/**")
+                            .hasAnyRole(
+                                    TipoUsuario.ADMIN.name(),
+                                    TipoUsuario.GARCOM.name()
+                            );
 
                     req.requestMatchers(HttpMethod.GET, "/api/produtos/cardapio/**")
                             .hasAnyRole(

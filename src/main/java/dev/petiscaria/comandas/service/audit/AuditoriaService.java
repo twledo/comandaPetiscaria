@@ -6,6 +6,7 @@ import dev.petiscaria.comandas.models.audit.Venda;
 import dev.petiscaria.comandas.models.audit.VendaItem;
 import dev.petiscaria.comandas.models.comanda.Comanda;
 import dev.petiscaria.comandas.models.comanda.ComandaHistorico;
+import dev.petiscaria.comandas.models.comanda.ItemPedido;
 import dev.petiscaria.comandas.repository.audit.VendaRepository;
 import dev.petiscaria.comandas.repository.comanda.ComandaHistoricoRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,23 +29,23 @@ public class AuditoriaService {
     private final ComandaHistoricoRepository historicoRepository;
     private final VendaRepository vendaRepository;
 
-    // ─── 1. AÇÕES GERAIS (Abertura, Conta Pedida, Reabertura, etc) ──────────────
+    // ─── 1. AÇÕES GERAIS ────────────────────────────────────────────────────────
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void registrarAcao(Comanda comanda, AcaoComanda acao, String detalhes, String usuario) {
         salvarHistorico(comanda, acao, detalhes, usuario, null, null, null, null, null, null);
     }
 
-    // ─── 2. AÇÕES DE ITENS (Adição e Estorno) ───────────────────────────────────
+    // ─── 2. AÇÕES DE ITENS ───────────────────────────────────────────────────────
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void registrarAcaoItem(Comanda comanda, AcaoComanda acao, String detalhes, String usuario,
-                                  String numeroPedido, // Adicionado para rastreio de lote
+                                  String numeroPedido,
                                   Long produtoId, String nomeProduto, Integer quantidade, BigDecimal valorOperacao) {
         salvarHistorico(comanda, acao, detalhes, usuario, valorOperacao, produtoId, nomeProduto, quantidade, null, numeroPedido);
     }
 
-    // ─── 3. AÇÕES DE PAGAMENTO (Parcial, Divisão, Total) ────────────────────────
+    // ─── 3. AÇÕES DE PAGAMENTO ──────────────────────────────────────────────────
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void registrarAcaoPagamento(Comanda comanda, AcaoComanda acao, String detalhes, String usuario,
@@ -52,7 +53,7 @@ public class AuditoriaService {
         salvarHistorico(comanda, acao, detalhes, usuario, valorOperacao, null, null, null, metodoPagamento, null);
     }
 
-    // ─── MÉTODO BASE PRIVADO (Concentra a lógica de salvamento) ─────────────────
+    // ─── MÉTODO BASE PRIVADO ────────────────────────────────────────────────────
 
     private void salvarHistorico(Comanda comanda, AcaoComanda acao, String detalhes, String usuario,
                                  BigDecimal valorOperacao, Long produtoId, String nomeProduto,
@@ -73,16 +74,14 @@ public class AuditoriaService {
                 .nomeProduto(nomeProduto)
                 .quantidade(quantidade)
                 .metodoPagamento(metodoPagamento)
-                // Implementação dos novos campos de auditoria:
                 .numeroPedido(numeroPedido)
                 .numeroMesa(comanda.getMesa() != null ? comanda.getMesa().getNumero() : null)
                 .build();
 
         historicoRepository.save(historico);
-        log.debug("Ação {} registrada com sucesso para comanda {}", acao, comanda.getId());
     }
 
-    // ─── SNAPSHOT DE VENDA (Geração do Recibo Final) ────────────────────────────
+    // ─── SNAPSHOT DE VENDA (Refatorado para o novo modelo de Pedidos) ────────────
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void salvarSnapshotVenda(Comanda comanda, String usuarioCaixa) {
@@ -102,9 +101,9 @@ public class AuditoriaService {
                 .dataVenda(LocalDateTime.now())
                 .build();
 
-        List<VendaItem> itensVenda = Optional.ofNullable(comanda.getItens())
-                .orElse(List.of())
-                .stream()
+        // MÁGICA: FlatMap para pegar todos os itens de todos os pedidos da comanda
+        List<VendaItem> itensVenda = comanda.getPedidos().stream()
+                .flatMap(pedido -> pedido.getItens().stream())
                 .map(item -> {
                     BigDecimal totalItem = item.getTotalItem() != null ? item.getTotalItem() : BigDecimal.ZERO;
 
@@ -128,6 +127,6 @@ public class AuditoriaService {
 
         venda.setItensConsumidos(itensVenda);
         vendaRepository.save(venda);
-        log.debug("Snapshot da venda salvo com {} itens.", itensVenda.size());
+        log.debug("Snapshot da venda salvo com {} itens extraídos dos pedidos.", itensVenda.size());
     }
 }

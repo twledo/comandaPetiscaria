@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { produtosApi, comandasApi, dominiosApi } from '../../api';
-import type { Opcao } from '../../api'; // <-- Importando como TIPO
-import type { Comanda, Mesa, Produto, CarrinhoItem } from '../../types';
+import type { Opcao } from '../../api';
+import type { Comanda, Mesa, Produto } from '../../types';
 import styles from './LancarItensModal.module.css';
 
 interface Props {
@@ -11,20 +11,34 @@ interface Props {
     onRefresh: () => Promise<void>;
 }
 
+// Estendemos o tipo localmente para garantir que o TypeScript aceite a observação
+export type ItemDoCarrinho = {
+    produto: Produto;
+    quantidade: number;
+    meiaPorcao: boolean;
+    observacao?: string;
+};
+
 export const TAXA_MEIA_PORCAO = 0.6;
 
 export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: Props) {
     const [produtos, setProdutos] = useState<Produto[]>([]);
-    const [categorias, setCategorias] = useState<Opcao[]>([]); // <-- STATE DINÂMICO
+    const [categorias, setCategorias] = useState<Opcao[]>([]);
     const [busca, setBusca] = useState('');
     const [categoria, setCategoria] = useState<number | string>('');
-    const [carrinho, setCarrinho] = useState<CarrinhoItem[]>([]);
+
+    // Carrinho
+    const [carrinho, setCarrinho] = useState<ItemDoCarrinho[]>([]);
+
+    // Modal de Observação
+    const [produtoParaObservacao, setProdutoParaObservacao] = useState<{produto: Produto, meiaPorcao: boolean} | null>(null);
+    const [observacaoTemp, setObservacaoTemp] = useState('');
+
     const [loading, setLoading] = useState(true);
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
-        // Busca as categorias do backend uma única vez
         dominiosApi.buscarTodos().then(res => setCategorias(res.categorias)).catch(console.error);
     }, []);
 
@@ -41,29 +55,50 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
             .finally(() => setLoading(false));
     }, [busca, categoria]);
 
-    function addCarrinho(produto: Produto, meiaPorcao: boolean) {
+    // ─── Lógica do Modal de Observação ──────────────────────────────────────────
+
+    function abrirModalObservacao(produto: Produto, meiaPorcao: boolean) {
+        setProdutoParaObservacao({ produto, meiaPorcao });
+        setObservacaoTemp(''); // Limpa a observação anterior
+    }
+
+    function confirmarAdicaoComObservacao() {
+        if (!produtoParaObservacao) return;
+
+        const { produto, meiaPorcao } = produtoParaObservacao;
+        const obsFinal = observacaoTemp.trim() !== '' ? observacaoTemp.trim() : undefined;
+
         setCarrinho(prev => {
-            const exist = prev.find(i => i.produto.id === produto.id && i.meiaPorcao === meiaPorcao);
+            // Verifica se já existe um item EXATAMENTE igual (mesmo id, porção e observação)
+            const exist = prev.find(i =>
+                i.produto.id === produto.id &&
+                i.meiaPorcao === meiaPorcao &&
+                i.observacao === obsFinal
+            );
+
             if (exist) {
                 return prev.map(i =>
-                    i.produto.id === produto.id && i.meiaPorcao === meiaPorcao
+                    i.produto.id === produto.id && i.meiaPorcao === meiaPorcao && i.observacao === obsFinal
                         ? { ...i, quantidade: i.quantidade + 1 }
                         : i
                 );
             }
-            return [...prev, { produto, quantidade: 1, meiaPorcao }];
+            return [...prev, { produto, quantidade: 1, meiaPorcao, observacao: obsFinal }];
         });
+
+        // Fecha o modal de observação
+        setProdutoParaObservacao(null);
     }
 
-    function removeCarrinho(produtoId: number, meiaPorcao: boolean) {
+    // ─── Controles do Carrinho ──────────────────────────────────────────────────
+
+    function alterarQuantidadeCarrinho(produtoId: number, meiaPorcao: boolean, observacao: string | undefined, delta: number) {
         setCarrinho(prev =>
-            prev
-                .map(i =>
-                    i.produto.id === produtoId && i.meiaPorcao === meiaPorcao
-                        ? { ...i, quantidade: i.quantidade - 1 }
-                        : i
-                )
-                .filter(i => i.quantidade > 0)
+            prev.map(i =>
+                i.produto.id === produtoId && i.meiaPorcao === meiaPorcao && i.observacao === observacao
+                    ? { ...i, quantidade: i.quantidade + delta }
+                    : i
+            ).filter(i => i.quantidade > 0)
         );
     }
 
@@ -71,6 +106,8 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
         (acc, i) => acc + Number(i.produto.preco) * (i.meiaPorcao ? TAXA_MEIA_PORCAO : 1) * i.quantidade,
         0
     );
+
+    // ─── Envio para a API ───────────────────────────────────────────────────────
 
     async function confirmar() {
         if (carrinho.length === 0) return;
@@ -81,11 +118,11 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
             const itensParaEnviar = carrinho.map(item => ({
                 produtoId: item.produto.id,
                 quantidade: item.quantidade,
-                meiaPorcao: item.meiaPorcao || false
+                meiaPorcao: item.meiaPorcao || false,
+                observacao: item.observacao || null // Envia a observação para o backend
             }));
 
-            const sla = await comandasApi.lancarItens(comanda.id, itensParaEnviar);
-            console.log(sla);
+            await comandasApi.lancarItens(comanda.id, itensParaEnviar);
 
             await onRefresh();
             onClose();
@@ -99,6 +136,8 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
     return (
         <div className={styles.backdrop} onClick={e => e.target === e.currentTarget && onClose()}>
             <div className={`${styles.modal} animate-scale`}>
+
+                {/* ── HEADER ── */}
                 <div className={styles.header}>
                     <div>
                         <h2 className={styles.title}>Lançar Itens</h2>
@@ -107,7 +146,10 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                     <button className={styles.closeBtn} onClick={onClose}>✕</button>
                 </div>
 
+                {/* ── BODY ── */}
                 <div className={styles.body}>
+
+                    {/* ── LISTA DE PRODUTOS ── */}
                     <div className={styles.cardapioPanel}>
                         <div className={styles.searchBar}>
                             <input
@@ -118,7 +160,6 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                             />
                         </div>
 
-                        {/* FILTROS DINÂMICOS AQUI */}
                         <div className={styles.catFilters}>
                             <button
                                 className={`${styles.catBtn} ${categoria === '' ? styles.active : ''}`}
@@ -144,6 +185,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                         ) : (
                             <div className={styles.produtosList}>
                                 {produtos.map(produto => {
+                                    // Total de itens desse produto no carrinho (independente de meia/inteira ou obs)
                                     const qtdCarrinho = carrinho
                                         .filter(i => i.produto.id === produto.id)
                                         .reduce((s, i) => s + i.quantidade, 0);
@@ -166,7 +208,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                                                 )}
                                                 <button
                                                     className={styles.addBtn}
-                                                    onClick={() => addCarrinho(produto, false)}
+                                                    onClick={() => abrirModalObservacao(produto, false)}
                                                     title="Adicionar porção inteira"
                                                 >
                                                     +
@@ -174,7 +216,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                                                 {produto.permiteMeia && (
                                                     <button
                                                         className={`${styles.addBtn} ${styles.addBtnMeia}`}
-                                                        onClick={() => addCarrinho(produto, true)}
+                                                        onClick={() => abrirModalObservacao(produto, true)}
                                                         title="Adicionar meia porção"
                                                     >
                                                         ½
@@ -188,10 +230,11 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                         )}
                     </div>
 
+                    {/* ── CARRINHO LATERAL ── */}
                     <div className={styles.carrinhoPanel}>
                         <div className={styles.carrinhoHeader}>
                             <span>Carrinho</span>
-                            <span className={styles.carrinhoCount}>{carrinho.length} itens</span>
+                            <span className={styles.carrinhoCount}>{carrinho.length} itens distintos</span>
                         </div>
 
                         {carrinho.length === 0 ? (
@@ -199,22 +242,36 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                         ) : (
                             <ul className={styles.carrinhoList}>
                                 {carrinho.map(item => (
-                                    <li key={`${item.produto.id}-${item.meiaPorcao}`} className={styles.carrinhoItem}>
+                                    // Chave única considerando produto, porção e observação
+                                    <li key={`${item.produto.id}-${item.meiaPorcao}-${item.observacao || ''}`} className={styles.carrinhoItem}>
+
                                         <div className={styles.carrinhoItemNome}>
-                                            {item.produto.nome}
-                                            {item.meiaPorcao && <span className={styles.meiaTag}>½</span>}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                {item.produto.nome}
+                                                {item.meiaPorcao && <span className={styles.meiaTag}>½</span>}
+                                            </div>
                                         </div>
+
                                         <div className={styles.carrinhoControls}>
                                             <button
                                                 className={styles.controlBtn}
-                                                onClick={() => removeCarrinho(item.produto.id, item.meiaPorcao)}
+                                                onClick={() => alterarQuantidadeCarrinho(item.produto.id, item.meiaPorcao, item.observacao, -1)}
                                             >−</button>
                                             <span>{item.quantidade}</span>
+                                            {/* O botão de + no carrinho não pede observação novamente, só soma a quantidade daquele item idêntico */}
                                             <button
                                                 className={styles.controlBtn}
-                                                onClick={() => addCarrinho(item.produto, item.meiaPorcao)}
+                                                onClick={() => alterarQuantidadeCarrinho(item.produto.id, item.meiaPorcao, item.observacao, 1)}
                                             >+</button>
+
+                                            {/* Exibe a observação se existir */}
+                                            {item.observacao && (
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-2)', marginLeft: '5px', marginTop: '2px' }}>
+                                                    Obs: {item.observacao}
+                                                </div>
+                                            )}
                                         </div>
+
                                         <span className={styles.carrinhoItemTotal}>
                                             R$ {(Number(item.produto.preco) * (item.meiaPorcao ? TAXA_MEIA_PORCAO : 1) * item.quantidade)
                                             .toFixed(2).replace('.', ',')}
@@ -243,6 +300,47 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                     </div>
                 </div>
             </div>
+
+            {/* ── MODAL DE OBSERVAÇÃO (SOBREPOSTO) ── */}
+            {produtoParaObservacao && (
+                <div className={styles.obsBackdrop}>
+                    <div className={styles.obsModal}>
+                        <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text)' }}>
+                            Adicionar {produtoParaObservacao.produto.nome}
+                            {produtoParaObservacao.meiaPorcao && ' (Meia)'}
+                        </h3>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                            <label style={{ fontSize: '0.85rem', color: 'var(--text-2)', fontWeight: 600 }}>
+                                Observação (Opcional):
+                            </label>
+                            <textarea
+                                placeholder="Ex: Sem cebola, gelo e limão, bem passado..."
+                                value={observacaoTemp}
+                                onChange={(e) => setObservacaoTemp(e.target.value)}
+                                rows={3}
+                                className={styles.obsInput}
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className={styles.obsActions}>
+                            <button
+                                onClick={() => setProdutoParaObservacao(null)}
+                                className={styles.btnCancelar}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmarAdicaoComObservacao}
+                                className={styles.btnConfirmar}
+                            >
+                                Adicionar ao Pedido
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

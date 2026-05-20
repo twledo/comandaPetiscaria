@@ -4,7 +4,6 @@ import dev.petiscaria.comandas.dto.itens.LancamentoLoteDTO;
 import dev.petiscaria.comandas.dto.pagamento.PagamentoItensDTO;
 import dev.petiscaria.comandas.dto.pagamento.PagamentoParcialDTO;
 import dev.petiscaria.comandas.models.comanda.Comanda;
-import dev.petiscaria.comandas.models.comanda.ItemPedido;
 import dev.petiscaria.comandas.service.comanda.ComandaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -70,13 +69,14 @@ public class ComandaController {
 
     /**
      * POST /api/comandas/{id}/pagar-itens
-     * Remove os itens da comanda e registra recebimento.
-     * Body: { "itensIds": [1, 3], "metodoPagamento": "PIX" }
-     */
-    /**
-     * POST /api/comandas/{id}/pagar-itens
-     * Suporta quantidade parcial por item.
-     * Body: { "itens": [{ "itemId": 1, "quantidadePagar": 1 }], "metodoPagamento": "PIX" }
+     * Suporta quantidade parcial por item e métodos de pagamento independentes.
+     * Body:
+     * {
+     * "itens": [
+     * { "itemId": 1, "quantidadePagar": 1, "metodoPagamento": "PIX" },
+     * { "itemId": 2, "quantidadePagar": 2, "metodoPagamento": "DEBITO" }
+     * ]
+     * }
      */
     @PostMapping("/{comandaId}/pagar-itens")
     @PreAuthorize("hasRole('ADMIN')")
@@ -85,7 +85,7 @@ public class ComandaController {
             @RequestBody PagamentoItensDTO dto) {
         return ResponseEntity.ok(
                 comandaService.pagarItensEspecificos(
-                        comandaId, dto.itens(), dto.metodoPagamento(), getUsuarioLogado()));
+                        comandaId, dto.itens(), getUsuarioLogado()));
     }
 
     // ─── Pagamento — divisão igualitária ou por valor livre ─────────
@@ -93,21 +93,23 @@ public class ComandaController {
     /**
      * POST /api/comandas/{id}/dividir-conta
      *
-     * Modalidade IGUALITARIO:
+     * Modalidade IGUALITARIO (Agora envia a lista de parcelas para processar os métodos atômicos):
      * {
-     *   "modalidade": "IGUALITARIO",
-     *   "numeroPessoas": 3,
-     *   "metodoPagamento": "PIX"
+     * "modalidade": "IGUALITARIO",
+     * "numeroPessoas": 2,
+     * "parcelas": [
+     * { "nomePessoa": "Pessoa 1", "valor": 50.00, "metodoPagamento": "PIX" },
+     * { "nomePessoa": "Pessoa 2", "valor": 50.00, "metodoPagamento": "CREDITO" }
+     * ]
      * }
      *
      * Modalidade VALOR_LIVRE:
      * {
-     *   "modalidade": "VALOR_LIVRE",
-     *   "parcelas": [
-     *     { "nomePessoa": "Ana",  "valor": 70.00 },
-     *     { "nomePessoa": "João", "valor": 30.00 }
-     *   ],
-     *   "metodoPagamento": "CREDITO"
+     * "modalidade": "VALOR_LIVRE",
+     * "parcelas": [
+     * { "nomePessoa": "Ana",  "valor": 70.00, "metodoPagamento": "DINHEIRO" },
+     * { "nomePessoa": "João", "valor": 30.00, "metodoPagamento": "PIX" }
+     * ]
      * }
      */
     @PostMapping("/{id}/dividir-conta")

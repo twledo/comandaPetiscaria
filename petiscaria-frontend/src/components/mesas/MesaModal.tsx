@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
-import { comandasApi } from '../../api';
-import { useAuth } from '../../contexts/AuthContext';
-import type { Mesa } from '../../types';
+import React, {useState, useMemo} from 'react';
+import {comandasApi, pedidosApi} from '../../api';
+import {useAuth} from '../../contexts/AuthContext';
+import type {Mesa} from '../../types';
 import LancarItensModal from '../comandas/LancarItensModal';
 import DivisaoContaModal from '../comandas/divisao/DivisaoContaModal';
 import styles from './MesaModal.module.css';
@@ -13,8 +13,8 @@ interface Props {
     onRefresh: () => Promise<void>;
 }
 
-export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Props) {
-    const { isAdmin } = useAuth();
+export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props) {
+    const {isAdmin} = useAuth();
     const [nomeCliente, setNomeCliente] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -22,8 +22,9 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
     const [showDivisao, setShowDivisao] = useState(false);
 
     const comanda = mesa.comandaAtiva;
+    const temPedidoPendente = comanda?.pedidos?.some((p: any) => p.status === 'PENDENTE');
 
-    async function exec(fn: () => Promise<unknown>) {
+    async function exec(fn: () => Promise<any>) {
         setError('');
         setLoading(true);
         try {
@@ -49,14 +50,12 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
     }
 
     // ── Renderização Condicional: Divisão de Conta ──
-    // FIXED: Now properly returning the component and using onRefresh
     if (showDivisao && comanda) {
         return (
             <DivisaoContaModal
                 comanda={comanda}
                 onClose={() => setShowDivisao(false)}
                 onSuccess={() => {
-                    // Update global data. The modal will decide whether to close or stay open.
                     onRefresh();
                 }}
             />
@@ -71,7 +70,7 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
                 <div className={styles.header}>
                     <div>
                         <h2 className={styles.title}>Mesa {mesa.numero}</h2>
-                        <StatusBadge status={mesa.status} label={statusLabel} />
+                        <StatusBadge status={mesa.status} label={statusLabel}/>
                     </div>
                     <button className={styles.closeBtn} onClick={onClose}>✕</button>
                 </div>
@@ -81,8 +80,8 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
                     {/* ── DISPONIVEL ─────────────────────────────── */}
                     {mesa.status === 'DISPONIVEL' && (
                         <div className={styles.section}>
-                            <div style={{ marginBottom: '0.5rem' }}>
-                                <h3 style={{ color: 'var(--text)', marginBottom: '4px' }}>Novo Atendimento</h3>
+                            <div style={{marginBottom: '0.5rem'}}>
+                                <h3 style={{color: 'var(--text)', marginBottom: '4px'}}>Novo Atendimento</h3>
                                 <p className={styles.description}>Identifique o cliente para iniciar:</p>
                             </div>
 
@@ -101,7 +100,7 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
                                 onClick={() => exec(() => comandasApi.abrir(mesa.id, nomeCliente))}
                                 disabled={loading || !nomeCliente.trim()}
                             >
-                                {loading ? <Spinner /> : '▶ Abrir Mesa e Iniciar'}
+                                {loading ? <Spinner/> : '▶ Abrir Mesa e Iniciar'}
                             </button>
                         </div>
                     )}
@@ -109,7 +108,7 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
                     {/* ── OCUPADA ────────────────────────────────── */}
                     {mesa.status === 'OCUPADA' && comanda && (
                         <>
-                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh} />
+                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh} exec={exec}/>
 
                             <div className={styles.actions}>
                                 <button
@@ -119,13 +118,23 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
                                     + Lançar Itens
                                 </button>
 
-                                <button
-                                    className={`${styles.btn} ${styles.btnAmber}`}
-                                    onClick={() => exec(() => comandasApi.fechar(comanda.id))}
-                                    disabled={loading}
-                                >
-                                    {loading ? <Spinner /> : '✓ Pedir Conta'}
-                                </button>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                                    <button
+                                        className={`${styles.btn} ${styles.btnGreen}`}
+                                        onClick={() => exec(() => comandasApi.fechar(comanda.id))}
+                                        disabled={loading || temPedidoPendente}
+                                        title={temPedidoPendente ? "Entregue todos os pedidos antes de fechar a conta" : "Pedir Conta"}
+                                    >
+                                        {loading ? <Spinner/> : '✓ Pedir Conta'}
+                                    </button>
+
+                                    {/* Aviso visual para o garçom saber por que o botão está bloqueado */}
+                                    {temPedidoPendente && (
+                                        <span style={{ color: 'var(--orange)', fontSize: '0.8rem', textAlign: 'center', fontWeight: 'bold' }}>
+                                        Entregue ou estorne os itens pendentes para liberar a conta.
+                                    </span>
+                                    )}
+                                </div>
                             </div>
                         </>
                     )}
@@ -133,7 +142,7 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
                     {/* ── AGUARDANDO_PAGAMENTO ───────────────────── */}
                     {mesa.status === 'AGUARDANDO_PAGAMENTO' && comanda && (
                         <>
-                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh} />
+                            <ComandaResumo comanda={comanda} mesa={mesa} onRefresh={onRefresh} exec={exec}/>
 
                             <div className={styles.totalBox}>
                                 <span>Total a Receber</span>
@@ -161,7 +170,7 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
                                 </div>
                             ) : (
                                 <p className={styles.waitMsg}>
-                                    Aguardando confirmação do administrador.
+                                    Aguardando confirmação do administrador no caixa.
                                 </p>
                             )}
                         </>
@@ -179,16 +188,32 @@ export default function MesaModal({ mesa, statusLabel, onClose, onRefresh }: Pro
 function ComandaResumo({
                            comanda,
                            mesa,
-                           onRefresh
+                           onRefresh,
+                           exec
                        }: {
-    comanda: NonNullable<Mesa['comandaAtiva']>,
+    comanda: any,
     mesa: Mesa,
-    onRefresh: () => Promise<void>
+    onRefresh: () => Promise<void>,
+    exec: (fn: () => Promise<any>) => Promise<void>
 }) {
-    const { isAdmin } = useAuth();
     const [estornando, setEstornando] = useState<number | null>(null);
     const [erroLocal, setErroLocal] = useState<string | null>(null);
 
+    const pedidos = useMemo(() => {
+        const rawPedidos = comanda?.pedidos || [];
+        return [...rawPedidos]
+            .filter(p => p.itens && p.itens.length > 0) // 👈 Ignora pedidos sem itens na listagem
+            .sort((a, b) => {
+                if (a.status === 'PENDENTE' && b.status !== 'PENDENTE') return -1;
+                if (a.status !== 'PENDENTE' && b.status === 'PENDENTE') return 1;
+                return b.id - a.id;
+            }); // <-- Faltava fechar as chaves e o parêntese aqui no código anterior!
+    }, [comanda?.pedidos]);
+
+    // Calcula o total de itens para o cabeçalho
+    const totalLancamentos = pedidos.reduce((acc: number, pedido: any) => acc + (pedido.itens?.length || 0), 0);
+
+    // Função para estornar um item específico
     async function estornar(itemId: number) {
         setEstornando(itemId);
         setErroLocal(null);
@@ -196,91 +221,137 @@ function ComandaResumo({
             await comandasApi.estornarItem(comanda.id, itemId);
             await onRefresh();
         } catch (e: any) {
-            const msg = e.response?.data?.message || "Erro ao estornar item.";
-            setErroLocal(msg);
+            setErroLocal(e.response?.data?.message || "Erro ao estornar item.");
             setTimeout(() => setErroLocal(null), 5000);
         } finally {
             setEstornando(null);
         }
     }
 
-    // Agrupando itens iguais para a visualização
-    const itensAgrupados = useMemo(() => {
-        const mapa = new Map();
+    // Agrupa itens de um array (usado dentro de cada pedido)
+    const agruparItens = (itens: any[]) => {
+        if (!itens || itens.length === 0) return [];
 
-        comanda.itens.forEach(item => {
-            const key = `${item.nomeProduto}-${item.meiaPorcao}`;
+        const agrupados = itens.reduce((acc, item) => {
+            // Incluímos a observação na chave de agrupamento
+            const obsKey = (item.observacao || "").trim().toLowerCase();
+            const chave = `${item.produto.id}-${item.meiaPorcao}-${obsKey}`;
 
-            if (!mapa.has(key)) {
-                mapa.set(key, {
+            if (!acc[chave]) {
+                acc[chave] = {
                     ...item,
-                    totalAgrupado: Number(item.totalItem),
-                    ids: [item.id]
-                });
+                    ids: [item.id],
+                    totalAgrupado: item.totalItem || 0
+                };
             } else {
-                const existente = mapa.get(key);
-                existente.quantidade += item.quantidade;
-                existente.totalAgrupado += Number(item.totalItem);
-                existente.ids.push(item.id);
+                acc[chave].quantidade += item.quantidade;
+                acc[chave].totalAgrupado += item.totalItem || 0;
+                acc[chave].ids.push(item.id);
             }
-        });
+            return acc;
+        }, {} as Record<string, any>);
 
-        return Array.from(mapa.values());
-    }, [comanda.itens]);
+        return Object.values(agrupados);
+    };
 
     return (
         <div className={styles.itensSection}>
             <div className={styles.itensHeader}>
                 <div className={styles.comandaInfo}>
-                    <span className={styles.comandaId}>Itens da Comanda #{comanda.id}</span>
+                    <span className={styles.comandaId}>Comanda #{comanda.id}</span>
                     {comanda.nomeCliente && (
                         <span className={styles.clienteNome}>
                             {' - '}{comanda.nomeCliente.toUpperCase()}
                         </span>
                     )}
                 </div>
-                <span className={styles.itensCount}>{comanda.itens.length} lançamentos</span>
+                <span className={styles.itensCount}>{totalLancamentos} itens</span>
             </div>
 
-            {erroLocal && <p className={styles.errorInline}
-                             style={{ color: 'red', fontSize: '0.85rem', marginBottom: '8px' }}>{erroLocal}</p>}
+            {erroLocal && (
+                <p style={{
+                    color: 'var(--red)',
+                    fontSize: '0.85rem',
+                    padding: '0.5rem 1rem',
+                    background: 'var(--red-dim)',
+                    margin: 0
+                }}>
+                    {erroLocal}
+                </p>
+            )}
 
-            {itensAgrupados.length === 0 ? (
-                <p className={styles.emptyItens}>Nenhum item lançado ainda.</p>
-            ) : (
-                <ul className={styles.itensList}>
-                    {itensAgrupados.map(grupo => {
-                        const ultimoId = grupo.ids[grupo.ids.length - 1];
+            <div className={styles.pedidosContainer}>
+                {pedidos.length === 0 ? (
+                    <p className={styles.emptyItens}>Nenhum pedido lançado ainda.</p>
+                ) : (
+                    pedidos.map((pedido: any) => {
+                        const itensAgrupados = agruparItens(pedido.itens);
 
                         return (
-                            <li key={grupo.ids[0]} className={styles.itemRow}>
-                                <div className={styles.itemInfo}>
-                                    <span className={styles.itemNome}>
-                                        {grupo.nomeProduto}
-                                        {grupo.meiaPorcao && <span className={styles.meiaTag}>½</span>}
-                                    </span>
-                                    <span className={styles.itemQtd}>x{grupo.quantidade}</span>
+                            <div key={pedido.id} className={`${styles.pedidoWrapper} ${styles[pedido.status]}`}>
+                                {/* Cabeçalho do Pedido - Totalmente automático agora */}
+                                <div className={styles.pedidoHeader}>
+                                    <div className={styles.pedidoTitleBox}>
+                                        <span className={styles.pedidoTitle}>Pedido #{pedido.id}</span>
+                                        <span className={`${styles.statusBadge} ${styles[pedido.status]}`}>
+                                            {pedido.status}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div className={styles.itemRight}>
-                                    <span className={styles.itemTotal}>
-                                        R$ {grupo.totalAgrupado.toFixed(2).replace('.', ',')}
-                                    </span>
-                                    {mesa.status === 'OCUPADA' && (
-                                        <button
-                                            className={styles.estornoBtn}
-                                            onClick={() => estornar(ultimoId)}
-                                            disabled={estornando === ultimoId}
-                                            title="Estornar item"
-                                        >
-                                            {estornando === ultimoId ? '…' : (grupo.quantidade > 1 ? '−' : '✕')}
-                                        </button>
-                                    )}
-                                </div>
-                            </li>
+
+                                {/* Lista de Itens deste Pedido */}
+                                {itensAgrupados.length > 0 ? (
+                                    <ul className={styles.itensList}>
+                                        {itensAgrupados.map((grupo) => {
+                                            const ultimoId = grupo.ids[grupo.ids.length - 1];
+                                            return (
+                                                <li key={grupo.ids[0]} className={styles.itemRow}>
+                                                    <div className={styles.itemInfo}>
+                                                        <span className={styles.itemNome}>
+                                                            {grupo.nomeProduto}
+                                                            {grupo.meiaPorcao && <span className={styles.meiaTag}>½</span>}
+                                                        </span>
+                                                        <span className={styles.itemQtd}>x{grupo.quantidade}</span>
+                                                    </div>
+
+                                                    <div className={styles.itemRight}>
+                                                        <span className={styles.itemTotal}>
+                                                            R$ {grupo.totalAgrupado.toFixed(2).replace('.', ',')}
+                                                        </span>
+
+                                                        {/* Ações só aparecem se o pedido estiver PENDENTE */}
+                                                        {mesa.status === 'OCUPADA' && pedido.status === 'PENDENTE' && (
+                                                            <div className={styles.itemActions}>
+                                                                {/* Check de Entrega */}
+                                                                {!grupo.entregue ? (
+                                                                    <button
+                                                                        className={styles.btnEntregarItem}
+                                                                        onClick={() => exec(() => pedidosApi.entregarItem(ultimoId))}
+                                                                        title="Marcar como entregue"
+                                                                    >
+                                                                        ✓
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className={styles.itemEntregueCheck}>✓</span>
+                                                                )}
+
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                ) : (
+                                    <p className={styles.emptyItens} style={{padding: '0.5rem 1rem'}}>
+                                        Sem itens ativos.
+                                    </p>
+                                )}
+                            </div>
                         );
-                    })}
-                </ul>
-            )}
+                    })
+                )}
+            </div>
 
             <div className={styles.subtotal}>
                 <span>Subtotal</span>
@@ -290,7 +361,7 @@ function ComandaResumo({
     );
 }
 
-function StatusBadge({ status, label }: { status: string, label: string }) {
+function StatusBadge({status, label}: { status: string, label: string }) {
     let cls = styles.badgeGreen;
     if (status === 'OCUPADA') cls = styles.badgeOrange;
     if (status === 'AGUARDANDO_PAGAMENTO') cls = styles.badgeAmber;
@@ -299,5 +370,5 @@ function StatusBadge({ status, label }: { status: string, label: string }) {
 }
 
 function Spinner() {
-    return <span className={styles.spinner} />;
+    return <span className={styles.spinner}/>;
 }

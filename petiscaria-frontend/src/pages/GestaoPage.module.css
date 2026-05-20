@@ -19,7 +19,7 @@
   padding: 0.55rem 0.9rem;
   color: var(--text);
   font-size: 0.875rem;
-  font-family: inherit;
+  font-family: 'Droid Sans', sans-serif;
   outline: none;
   width: 200px;
   transition: border-color 0.2s;
@@ -40,7 +40,7 @@
   background: var(--surface);
   color: var(--text-2);
   font-size: 0.8rem;
-  font-family: inherit;
+  font-family: 'Droid Sans', sans-serif;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.15s;
@@ -55,7 +55,7 @@
   background: var(--accent);
   color: #fff;
   font-size: 0.875rem;
-  font-family: 'Droid Sans',, sans-serif;
+  font-family: 'Droid Sans', sans-serif;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -137,7 +137,7 @@
   background: var(--surface-2);
   color: var(--text);
   font-size: 0.8rem;
-  font-family: inherit;
+  font-family: 'Droid Sans', sans-serif;
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -196,7 +196,7 @@
 
 .modalHeader h2 {
   font-size: 1.1rem;
-  font-family: 'Droid Sans',, sans-serif;
+  font-family: 'Droid Sans', sans-serif;
 }
 
 .closeBtn {
@@ -240,7 +240,7 @@
   padding: 0.6rem 0.875rem;
   color: var(--text);
   font-size: 0.875rem;
-  font-family: inherit;
+  font-family: 'Droid Sans', sans-serif;
   outline: none;
   transition: border-color 0.2s;
   resize: none;
@@ -291,7 +291,7 @@
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-  font-family: inherit;
+  font-family: 'Droid Sans', sans-serif;
   font-size: 0.9rem;
   cursor: pointer;
   transition: background 0.15s;
@@ -305,7 +305,7 @@
   border: none;
   background: var(--accent);
   color: #fff;
-  font-family: 'Droid Sans',, sans-serif;
+  font-family: 'Droid Sans', sans-serif;
   font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
