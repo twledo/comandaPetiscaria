@@ -3,6 +3,7 @@ package dev.petiscaria.comandas.models.comanda;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.petiscaria.comandas.enuns.StatusComanda;
+import dev.petiscaria.comandas.enuns.StatusPedido;
 import dev.petiscaria.comandas.models.mesa.Mesa;
 import dev.petiscaria.comandas.models.pedido.Pedido;
 import jakarta.persistence.*;
@@ -11,6 +12,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,18 +59,14 @@ public class Comanda {
     @JsonProperty("total") // Garante que o Jackson envie este cálculo para o Front
     public BigDecimal getTotal() {
         if (pedidos == null || pedidos.isEmpty()) {
-            return BigDecimal.ZERO;
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
 
         return pedidos.stream()
-                // 🚀 O FILTRO CRÍTICO: Ignora pedidos CANCELADOS
-                .filter(pedido -> pedido.getStatus() != dev.petiscaria.comandas.enuns.StatusPedido.CANCELADO)
-                .map(pedido -> {
-                    // Soma todos os itens dentro de cada pedido não cancelado
-                    return pedido.getItens().stream()
-                            .map(ItemPedido::getTotalItem)
-                            .reduce(BigDecimal.ZERO, BigDecimal::add);
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .filter(pedido -> pedido.getStatus() != StatusPedido.CANCELADO)
+                .flatMap(pedido -> pedido.getItens().stream())
+                .map(ItemPedido::getTotalItem)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP); 
     }
 }

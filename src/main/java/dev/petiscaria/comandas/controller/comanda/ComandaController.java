@@ -8,7 +8,10 @@ import dev.petiscaria.comandas.service.comanda.ComandaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -43,12 +46,13 @@ public class ComandaController {
     }
 
     @DeleteMapping("/{comandaId}/itens/{itemId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
     public ResponseEntity<Comanda> estornarItem(
             @PathVariable Long comandaId,
-            @PathVariable Long itemId) {
-        return ResponseEntity.ok(
-                comandaService.estornarItem(comandaId, itemId, getUsuarioLogado()));
+            @PathVariable Long itemId,
+            @RequestParam String motivo) {
+
+        Comanda comanda = comandaService.estornarItem(comandaId, itemId, motivo, getUsuarioLogado());
+        return ResponseEntity.ok(comanda);
     }
 
     @PatchMapping("/{id}/fechar")
@@ -113,10 +117,9 @@ public class ComandaController {
      * }
      */
     @PostMapping("/{id}/dividir-conta")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Comanda> dividirConta(
             @PathVariable Long id,
-            @RequestBody PagamentoParcialDTO dto) {
+            @Validated @RequestBody PagamentoParcialDTO dto) {
         return ResponseEntity.ok(
                 comandaService.registrarDivisaoConta(id, dto, getUsuarioLogado()));
     }

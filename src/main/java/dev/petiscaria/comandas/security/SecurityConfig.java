@@ -34,12 +34,12 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(request -> {
                     var config = new org.springframework.web.cors.CorsConfiguration();
 
-                    // MODIFICAÇÃO AQUI:
-                    // Usamos AllowedOriginPatterns para aceitar localhost e o IP da rede
                     config.setAllowedOriginPatterns(java.util.List.of(
                             "http://localhost:5173",
                             "http://192.168.100.184:5173", // Seu IP atual
-                            "http://192.168.100.*:5173"    // Qualquer dispositivo na sua rede
+                            "http://192.168.100.*:5173",    // Qualquer dispositivo na sua rede
+                            "https://reidoespetinhopetiscaria.com",
+                            "https://www.reidoespetinhopetiscaria.com"
                     ));
 
                     config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
@@ -57,10 +57,10 @@ public class SecurityConfig {
                     // Liberar o Handshake do WebSocket ANTES das outras regras
                     req.requestMatchers("/ws-petiscaria/**").permitAll();
 
-                    req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/login").permitAll();
+                    req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/**").permitAll();
 
-                    req.requestMatchers(HttpMethod.POST, "/api/auth/registrar")
-                            .hasRole(TipoUsuario.ADMIN.name());
+//                    req.requestMatchers(HttpMethod.POST, "/api/auth/registrar")
+//                          .hasRole(TipoUsuario.ADMIN.name());
 
                     req.requestMatchers(HttpMethod.POST, "/api/pedidos/**")
                             .hasAnyRole(

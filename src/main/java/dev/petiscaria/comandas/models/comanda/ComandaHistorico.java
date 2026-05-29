@@ -7,6 +7,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 @Entity
@@ -43,6 +44,14 @@ public class ComandaHistorico {
     private BigDecimal valorMomento;
 
     private BigDecimal valorOperacao;
+
+    public void setValorMomento(BigDecimal valorMomento) {
+        this.valorMomento = valorMomento.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public void setValorOperacao(BigDecimal valorOperacao) {
+        this.valorOperacao = valorOperacao.setScale(2, RoundingMode.HALF_UP);
+    }
 
     private Long produtoId;
     private String nomeProduto;

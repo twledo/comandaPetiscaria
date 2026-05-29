@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.RoundingMode;
 import java.util.List;
 
 @Service
@@ -20,10 +21,12 @@ public class ProdutoService {
 
     @Transactional
     public Produto cadastrar(Produto produto) {
-        // Regra simples: Todo produto novo já entra disponível por padrão
         if (produto.getDisponivel() == null) {
             produto.setDisponivel(true);
         }
+
+        normalizarCampos(produto);
+
         return produtoRepository.save(produto);
     }
 
@@ -32,8 +35,10 @@ public class ProdutoService {
         Produto produto = produtoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Produto não encontrado"));
 
+        normalizarCampos(novosDados);
+
         produto.setNome(novosDados.getNome());
-        produto.setPreco(novosDados.getPreco());
+        produto.setPreco(novosDados.getPreco().setScale(2, RoundingMode.HALF_UP));
         produto.setCategoria(novosDados.getCategoria());
         produto.setDescricao(novosDados.getDescricao());
         produto.setPermiteMeia(novosDados.isPermiteMeia());
@@ -71,5 +76,11 @@ public class ProdutoService {
         // Se estava true vira false, se estava false vira true (Acabou no estoque / Voltou)
         produto.setDisponivel(!produto.getDisponivel());
         return produtoRepository.save(produto);
+    }
+
+    private void normalizarCampos(Produto produto) {
+        if (produto.getNome() != null) {
+            produto.setNome(produto.getNome().toUpperCase().trim());
+        }
     }
 }

@@ -8,6 +8,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Entity
 @Table(name = "itens_pedido")
@@ -34,27 +35,41 @@ public class ItemPedido {
     @Column(nullable = false)
     private boolean entregue = false;
 
+    @Column(nullable = false)
+    private String status = "ATIVO";
+
+    private String motivoCancelamento;
+
+    private String usuarioResponsavelEstorno;
+    private String usuarioResponsavelEntrega;
+    private String usuarioLancamentoItem;
     private String nomeProduto; // Snapshot: Nome no momento da compra
     private Long quantidade;
     private BigDecimal precoUnitario; // Snapshot: Preço no momento da compra
+
+    @Column(length = 60)
     private String observacao;
     private boolean meiaPorcao = false;
 
     @JsonProperty("totalItem") // Aparecerá no seu JSON do Frontend
     public BigDecimal getTotalItem() {
+        if ("CANCELADO".equals(this.status)) {
+            return BigDecimal.ZERO;
+        }
+
         if (this.precoUnitario == null) return BigDecimal.ZERO;
         BigDecimal total = this.precoUnitario.multiply(new BigDecimal(this.quantidade));
         if (this.meiaPorcao) {
-            return total.multiply(new BigDecimal("0.6"));
+            return total.multiply(new BigDecimal("0.6").setScale(2, RoundingMode.HALF_UP));
         }
-        return total;
+        return total.setScale(2, RoundingMode.HALF_UP);
     }
 
     @JsonProperty("precoEfetivo") // Útil para mostrar o preço de 1 unidade de "meia"
     public BigDecimal getPrecoEfetivo() {
         if (this.precoUnitario == null) return BigDecimal.ZERO;
         return this.meiaPorcao ?
-                this.precoUnitario.multiply(new BigDecimal("0.6")) :
-                this.precoUnitario;
+                this.precoUnitario.multiply(new BigDecimal("0.6").setScale(2, RoundingMode.HALF_UP)) :
+                this.precoUnitario.setScale(2, RoundingMode.HALF_UP);
     }
 }

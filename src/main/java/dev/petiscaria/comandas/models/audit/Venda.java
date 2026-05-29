@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -33,6 +34,10 @@ public class Venda {
     private String nomeCliente;
 
     private BigDecimal totalVenda;
+
+    public void setTotalVenda(BigDecimal totalVenda) {
+        this.totalVenda = totalVenda.setScale(2, RoundingMode.HALF_UP);
+    }
 
     // --- Controle Temporal ---
     private LocalDateTime dataAbertura; // Vindo da Comanda.createdAt

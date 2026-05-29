@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 @Entity
@@ -31,6 +32,10 @@ public class ComandaRecebimento {
 
     @Enumerated(EnumType.STRING)
     private MetodoPagamento metodoPagamento;
+
+    public void setValor(BigDecimal valor) {
+        this.valor = valor.setScale(2, RoundingMode.HALF_UP);
+    }
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

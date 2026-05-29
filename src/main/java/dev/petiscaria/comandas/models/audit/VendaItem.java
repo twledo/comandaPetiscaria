@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Entity
 @Table(name = "venda_itens")
@@ -42,6 +43,18 @@ public class VendaItem {
     private BigDecimal precoVendido;
 
     private BigDecimal subtotal;
+
+    public void setPrecoTabela(BigDecimal precoTabela) {
+        this.precoTabela = precoTabela.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public void setPrecoVendido(BigDecimal precoVendido) {
+        this.precoVendido = precoVendido.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public void setSubtotal(BigDecimal subtotal) {
+        this.subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
+    }
 
     // Gravar se foi meia porção ajuda a entender o comportamento de consumo
     private boolean meiaPorcao;

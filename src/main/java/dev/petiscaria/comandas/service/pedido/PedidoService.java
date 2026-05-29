@@ -1,5 +1,6 @@
 package dev.petiscaria.comandas.service.pedido;
 
+import dev.petiscaria.comandas.enuns.AcaoComanda;
 import dev.petiscaria.comandas.enuns.StatusPedido;
 import dev.petiscaria.comandas.models.comanda.Comanda;
 import dev.petiscaria.comandas.models.comanda.ItemPedido;
@@ -7,6 +8,7 @@ import dev.petiscaria.comandas.models.pedido.Pedido;
 import dev.petiscaria.comandas.repository.comanda.ComandaRepository;
 import dev.petiscaria.comandas.repository.comanda.ItemPedidoRepository;
 import dev.petiscaria.comandas.repository.pedido.PedidoRepository;
+import dev.petiscaria.comandas.service.audit.AuditoriaService;
 import dev.petiscaria.comandas.service.comanda.ComandaService;
 import dev.petiscaria.comandas.service.mesa.MesaService;
 import lombok.RequiredArgsConstructor;
@@ -25,14 +27,12 @@ public class PedidoService {
 
     private final PedidoRepository pedidoRepository;
     private final ItemPedidoRepository itemPedidoRepository;
-    private final ComandaRepository comandaRepository;
-    private final MesaService mesaService;
     private final ComandaService comandaService;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final AuditoriaService auditoriaService;
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
-    public void entregarItem(Long itemId) {
+    public void entregarItem(Long itemId, String usuario) {
         ItemPedido item = itemPedidoRepository.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("Item não encontrado"));
 
@@ -40,8 +40,8 @@ public class PedidoService {
             throw new IllegalStateException("Não é possível entregar itens de um pedido cancelado.");
         }
 
-        // 1. Marca o item como entregue e SALVA
         item.setEntregue(true);
+        item.setUsuarioResponsavelEntrega(usuario);
         itemPedidoRepository.saveAndFlush(item); // O Flush força a gravação imediata
 
         Pedido pedido = item.getPedido();
@@ -54,6 +54,16 @@ public class PedidoService {
             pedido.setStatus(StatusPedido.ENTREGUE);
             pedidoRepository.save(pedido);
         }
+
+        auditoriaService.registrarAcaoItem(item.getPedido().getComanda(),
+                AcaoComanda.ITEM_ENTREGUE,
+                "Item entregue: " + item.getNomeProduto(),
+                usuario,
+                "PED-" + item.getPedido().getId(),
+                item.getProduto().getId(),
+                item.getNomeProduto(),
+                Math.toIntExact(item.getQuantidade()),
+                item.getTotalItem());
 
         comandaService.notificarMudancaMesas();
     }

@@ -19,13 +19,18 @@ import dev.petiscaria.comandas.service.audit.AuditoriaService;
 import dev.petiscaria.comandas.service.mesa.MesaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -118,10 +123,11 @@ public class ComandaService {
                 novoItem.setPedido(novoPedido);
                 novoItem.setProduto(produto);
                 novoItem.setNomeProduto(produto.getNome());
-                novoItem.setPrecoUnitario(produto.getPreco());
+                novoItem.setPrecoUnitario(produto.getPreco().setScale(2, RoundingMode.HALF_UP));
                 novoItem.setQuantidade(itemDto.quantidade().longValue());
                 novoItem.setMeiaPorcao(ehMeia);
                 novoItem.setObservacao(itemDto.observacao());
+                novoItem.setUsuarioLancamentoItem(usuario);
                 novoPedido.getItens().add(novoItem);
             }
         }
@@ -179,7 +185,12 @@ public class ComandaService {
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
-    public Comanda estornarItem(Long comandaId, Long itemId, String usuario) {
+    public Comanda estornarItem(Long comandaId, Long itemId, String motivo, String usuario) {
+        // 1. Validação de segurança
+        if (motivo == null || motivo.trim().length() < 10) {
+            throw new RuntimeException("O motivo do cancelamento deve conter no mínimo 10 caracteres.");
+        }
+
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         garantirMesaOcupada(comanda.getMesa());
 
@@ -188,6 +199,14 @@ public class ComandaService {
                 .filter(item -> item.getId().equals(itemId))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Item não encontrado nesta comanda."));
+
+        if ("CANCELADO".equals(itemParaEstornar.getStatus())) {
+            throw new RuntimeException("Este item já encontra-se cancelado.");
+        }
+
+        // 🌟 PERSISTÊNCIA: Gravando o motivo e o usuário na entidade
+        itemParaEstornar.setMotivoCancelamento(motivo.trim());
+        itemParaEstornar.setUsuarioResponsavelEstorno(usuario);
 
         Pedido pedidoPai = itemParaEstornar.getPedido();
         BigDecimal valorUnitarioEstornado = itemParaEstornar.getPrecoEfetivo();
@@ -198,21 +217,33 @@ public class ComandaService {
             detalheLog = String.format("Estorno parcial: Removida 1 un. de '%s'. Restam %d un.",
                     itemParaEstornar.getNomeProduto(), itemParaEstornar.getQuantidade());
         } else {
-            pedidoPai.getItens().remove(itemParaEstornar);
-            detalheLog = String.format("Estorno total: Removida a última unidade de '%s'.",
+            itemParaEstornar.setStatus("CANCELADO");
+            detalheLog = String.format("Estorno total: Marcada a última unidade de '%s' como cancelada.",
                     itemParaEstornar.getNomeProduto());
 
-            if (pedidoPai.getItens().isEmpty()) {
-                comanda.getPedidos().remove(pedidoPai);
-                detalheLog += " O pedido vazio foi removido.";
+            boolean todosCancelados = pedidoPai.getItens().stream()
+                    .allMatch(i -> "CANCELADO".equals(i.getStatus()));
+
+            if (todosCancelados) {
+                pedidoPai.setStatus(StatusPedido.CANCELADO);
+                detalheLog += " Todos os itens do pedido foram cancelados.";
             }
         }
 
         atualizarSaldoTotal(comanda);
 
+        // Auditoria (mantendo o log detalhado)
         auditoriaService.registrarAcaoItem(comanda, AcaoComanda.ITEM_REMOVIDO, detalheLog, usuario,
                 "PED-" + pedidoPai.getId(), itemParaEstornar.getProduto().getId(),
                 itemParaEstornar.getNomeProduto(), 1, valorUnitarioEstornado);
+
+        // Impressão do ticket
+        String ticket = "=================================\n" +
+                "    !!! CANCELAMENTO !!!\n" +
+                "   USUÁRIO: " + usuario + "\n" +
+                "   MOTIVO: " + motivo.trim().toUpperCase() + "\n" +
+                "=================================\n";
+        System.out.println(ticket);
 
         notificarMudancaMesas();
 
@@ -323,7 +354,11 @@ public class ComandaService {
 
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
-    public Comanda registrarDivisaoConta(Long comandaId, PagamentoParcialDTO dto, String usuario) {
+    public Comanda registrarDivisaoConta(Long comandaId, @NonNull PagamentoParcialDTO dto, String usuario) {
+        if (dto.modalidade() == null) {
+            throw new IllegalArgumentException("Modalidade de divisão é obrigatória.");
+        }
+
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         List<ComandaRecebimento> novosRecebimentos = new ArrayList<>();
         String detalheAuditoria = "";

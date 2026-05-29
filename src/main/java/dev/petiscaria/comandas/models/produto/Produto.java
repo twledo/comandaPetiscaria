@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Entity
 @Table(name = "produtos")
@@ -26,6 +27,10 @@ public class Produto {
 
     @Column(nullable = false)
     private BigDecimal preco;
+
+    public void setPreco(BigDecimal preco) {
+        this.preco = preco.setScale(2, RoundingMode.HALF_UP);
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(name = "categoria", nullable = false)
