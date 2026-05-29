@@ -16,7 +16,7 @@ export function useMesasWebSocket(onMessageReceived: (data: any) => void) {
             const raw = localStorage.getItem('petiscaria_auth');
             const user = raw ? (JSON.parse(raw) as AuthUser) : null;
 
-            const socket = new SockJS('http://localhost:8080/ws-petiscaria');
+            const socket = new SockJS('/ws-petiscaria');
             stompClient = Stomp.over(socket);
             // Desativa o log verboso do Stomp no console
             stompClient.debug = () => {};
