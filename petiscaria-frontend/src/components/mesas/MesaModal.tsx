@@ -118,7 +118,7 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
                                     + Lançar Itens
                                 </button>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                                <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%'}}>
                                     <button
                                         className={`${styles.btn} ${styles.btnGreen}`}
                                         onClick={() => exec(() => comandasApi.fechar(comanda.id))}
@@ -130,7 +130,12 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
 
                                     {/* Aviso visual para o garçom saber por que o botão está bloqueado */}
                                     {temPedidoPendente && (
-                                        <span style={{ color: 'var(--orange)', fontSize: '0.8rem', textAlign: 'center', fontWeight: 'bold' }}>
+                                        <span style={{
+                                            color: 'var(--orange)',
+                                            fontSize: '0.8rem',
+                                            textAlign: 'center',
+                                            fontWeight: 'bold'
+                                        }}>
                                         Entregue ou estorne os itens pendentes para liberar a conta.
                                     </span>
                                     )}
@@ -183,180 +188,234 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
     );
 }
 
-// ─── Sub-componentes ──────────────────────────────────────────────────────────
-
 function ComandaResumo({
                            comanda,
-                           mesa,
                            onRefresh,
                            exec
                        }: {
-    comanda: any,
-    mesa: Mesa,
+    comanda: NonNullable<Mesa['comandaAtiva']>,
     onRefresh: () => Promise<void>,
-    exec: (fn: () => Promise<any>) => Promise<void>
+    exec: (fn: () => Promise<any>) => void
 }) {
-    const [estornando, setEstornando] = useState<number | null>(null);
-    const [erroLocal, setErroLocal] = useState<string | null>(null);
+    const {isAdmin} = useAuth();
+    const [processandoItem, setProcessandoItem] = useState<number | null>(null);
+    const [confirmarEstorno, setConfirmarEstorno] = useState<{ itemId: number; nome: string } | null>(null);
 
-    const pedidos = useMemo(() => {
-        const rawPedidos = comanda?.pedidos || [];
-        return [...rawPedidos]
-            .filter(p => p.itens && p.itens.length > 0) // 👈 Ignora pedidos sem itens na listagem
-            .sort((a, b) => {
-                if (a.status === 'PENDENTE' && b.status !== 'PENDENTE') return -1;
-                if (a.status !== 'PENDENTE' && b.status === 'PENDENTE') return 1;
-                return b.id - a.id;
-            }); // <-- Faltava fechar as chaves e o parêntese aqui no código anterior!
-    }, [comanda?.pedidos]);
+    const [motivoEstorno, setMotivoEstorno] = useState('');
+    const MIN_CARACTERES = 10;
 
-    // Calcula o total de itens para o cabeçalho
-    const totalLancamentos = pedidos.reduce((acc: number, pedido: any) => acc + (pedido.itens?.length || 0), 0);
+    // 🌟 NOVO: Estado para controlar a aba selecionada
+    const [abaAtiva, setAbaAtiva] = useState<'RESUMO' | 'ENTREGUES' | 'CANCELADOS'>('RESUMO');
 
-    // Função para estornar um item específico
-    async function estornar(itemId: number) {
-        setEstornando(itemId);
-        setErroLocal(null);
+    const pedidos = (comanda as any).pedidos || [];
+    const itens = pedidos.flatMap((pedido: any) => {
+        return pedido.itens || [];
+    });
+
+    async function estornar(itemId: number, motivo: string) {
+        setProcessandoItem(itemId);
         try {
-            await comandasApi.estornarItem(comanda.id, itemId);
+            await comandasApi.estornarItem(comanda.id, itemId, motivo);
+            setConfirmarEstorno(null);
+            setMotivoEstorno('');
+            await new Promise(resolve => setTimeout(resolve, 400));
             await onRefresh();
-        } catch (e: any) {
-            setErroLocal(e.response?.data?.message || "Erro ao estornar item.");
-            setTimeout(() => setErroLocal(null), 5000);
+        } catch (e: unknown) {
+            console.error('Erro ao estornar item:', e);
         } finally {
-            setEstornando(null);
+            setProcessandoItem(null);
         }
     }
 
-    // Agrupa itens de um array (usado dentro de cada pedido)
-    const agruparItens = (itens: any[]) => {
-        if (!itens || itens.length === 0) return [];
+    async function entregar(itemId: number) {
+        setProcessandoItem(itemId);
+        try {
+            await pedidosApi.entregarItem(itemId);
+            await new Promise(resolve => setTimeout(resolve, 400));
+            await onRefresh();
+        } catch (e: unknown) {
+            console.error('Erro ao entregar item:', e);
+        } finally {
+            setProcessandoItem(null);
+        }
+    }
 
-        const agrupados = itens.reduce((acc, item) => {
-            // Incluímos a observação na chave de agrupamento
-            const obsKey = (item.observacao || "").trim().toLowerCase();
-            const chave = `${item.produto.id}-${item.meiaPorcao}-${obsKey}`;
+    // 🎨 Lógica centralizada de filtros para as abas
+    const itensPendentes = itens.filter((i: any) => {
+        const isCancelado = String(i.status).toUpperCase() === 'CANCELADO';
+        const isEntregue = String(i.status).toUpperCase() === 'ENTREGUE' || String(i.status).toUpperCase() === 'PRONTO' || i.entregue === true;
+        return !isCancelado && !isEntregue;
+    });
 
-            if (!acc[chave]) {
-                acc[chave] = {
-                    ...item,
-                    ids: [item.id],
-                    totalAgrupado: item.totalItem || 0
-                };
-            } else {
-                acc[chave].quantidade += item.quantidade;
-                acc[chave].totalAgrupado += item.totalItem || 0;
-                acc[chave].ids.push(item.id);
-            }
-            return acc;
-        }, {} as Record<string, any>);
+    const itensEntregues = itens.filter((i: any) => {
+        const isCancelado = String(i.status).toUpperCase() === 'CANCELADO';
+        const isEntregue = String(i.status).toUpperCase() === 'ENTREGUE' || String(i.status).toUpperCase() === 'PRONTO' || i.entregue === true;
+        return !isCancelado && isEntregue;
+    });
 
-        return Object.values(agrupados);
-    };
+    const itensCancelados = itens.filter((i: any) => String(i.status).toUpperCase() === 'CANCELADO');
+
+    // Define qual array vai ser desenhado na tela com base na aba clicada
+    let itensParaExibir = [];
+    if (abaAtiva === 'RESUMO') itensParaExibir = itensPendentes;
+    else if (abaAtiva === 'ENTREGUES') itensParaExibir = itensEntregues;
+    else if (abaAtiva === 'CANCELADOS') itensParaExibir = itensCancelados;
 
     return (
         <div className={styles.itensSection}>
-            <div className={styles.itensHeader}>
-                <div className={styles.comandaInfo}>
-                    <span className={styles.comandaId}>Comanda #{comanda.id}</span>
-                    {comanda.nomeCliente && (
-                        <span className={styles.clienteNome}>
-                            {' - '}{comanda.nomeCliente.toUpperCase()}
-                        </span>
-                    )}
-                </div>
-                <span className={styles.itensCount}>{totalLancamentos} itens</span>
+            {/* Cabeçalho com Abas */}
+            <div className={styles.tabsContainer}>
+                {['RESUMO', 'ENTREGUES', 'CANCELADOS'].map((aba) => (
+                    <button
+                        key={aba}
+                        className={`${styles.tabBtn} ${abaAtiva === aba ? styles.tabBtnActive : ''}`}
+                        onClick={() => setAbaAtiva(aba)}
+                    >
+                        {aba.charAt(0) + aba.slice(1).toLowerCase()}
+                        <span className={styles.tabBadge}>
+                        {aba === 'RESUMO' ? itensPendentes.length :
+                            aba === 'ENTREGUES' ? itensEntregues.length : itensCancelados.length}
+                    </span>
+                    </button>
+                ))}
             </div>
 
-            {erroLocal && (
-                <p style={{
-                    color: 'var(--red)',
-                    fontSize: '0.85rem',
-                    padding: '0.5rem 1rem',
-                    background: 'var(--red-dim)',
-                    margin: 0
-                }}>
-                    {erroLocal}
-                </p>
-            )}
+            {itensParaExibir.length === 0 ? (
+                <p className={styles.emptyItens}>Nenhum item nesta lista.</p>
+            ) : (
+                <ul className={styles.itensList}>
+                    {/* 🌟 LÓGICA DE AGRUPAMENTO POR PEDIDO */}
+                    {Object.entries(
+                        itensParaExibir.reduce((acc: any, item: any) => {
+                            const pid = item.pedido?.id || 'sem-pedido';
+                            if (!acc[pid]) acc[pid] = [];
+                            acc[pid].push(item);
+                            return acc;
+                        }, {})
+                    ).map(([pedidoId, itensDoPedido]: [string, any]) => (
 
-            <div className={styles.pedidosContainer}>
-                {pedidos.length === 0 ? (
-                    <p className={styles.emptyItens}>Nenhum pedido lançado ainda.</p>
-                ) : (
-                    pedidos.map((pedido: any) => {
-                        const itensAgrupados = agruparItens(pedido.itens);
-
-                        return (
-                            <div key={pedido.id} className={`${styles.pedidoWrapper} ${styles[pedido.status]}`}>
-                                {/* Cabeçalho do Pedido - Totalmente automático agora */}
-                                <div className={styles.pedidoHeader}>
-                                    <div className={styles.pedidoTitleBox}>
-                                        <span className={styles.pedidoTitle}>Pedido #{pedido.id}</span>
-                                        <span className={`${styles.statusBadge} ${styles[pedido.status]}`}>
-                                            {pedido.status}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Lista de Itens deste Pedido */}
-                                {itensAgrupados.length > 0 ? (
-                                    <ul className={styles.itensList}>
-                                        {itensAgrupados.map((grupo) => {
-                                            const ultimoId = grupo.ids[grupo.ids.length - 1];
-                                            return (
-                                                <li key={grupo.ids[0]} className={styles.itemRow}>
-                                                    <div className={styles.itemInfo}>
-                                                        <span className={styles.itemNome}>
-                                                            {grupo.nomeProduto}
-                                                            {grupo.meiaPorcao && <span className={styles.meiaTag}>½</span>}
-                                                        </span>
-                                                        <span className={styles.itemQtd}>x{grupo.quantidade}</span>
-                                                    </div>
-
-                                                    <div className={styles.itemRight}>
-                                                        <span className={styles.itemTotal}>
-                                                            R$ {grupo.totalAgrupado.toFixed(2).replace('.', ',')}
-                                                        </span>
-
-                                                        {/* Ações só aparecem se o pedido estiver PENDENTE */}
-                                                        {mesa.status === 'OCUPADA' && pedido.status === 'PENDENTE' && (
-                                                            <div className={styles.itemActions}>
-                                                                {/* Check de Entrega */}
-                                                                {!grupo.entregue ? (
-                                                                    <button
-                                                                        className={styles.btnEntregarItem}
-                                                                        onClick={() => exec(() => pedidosApi.entregarItem(ultimoId))}
-                                                                        title="Marcar como entregue"
-                                                                    >
-                                                                        ✓
-                                                                    </button>
-                                                                ) : (
-                                                                    <span className={styles.itemEntregueCheck}>✓</span>
-                                                                )}
-
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                ) : (
-                                    <p className={styles.emptyItens} style={{padding: '0.5rem 1rem'}}>
-                                        Sem itens ativos.
-                                    </p>
-                                )}
+                        <li key={`pedido-${pedidoId}`} className={styles.pedidoContainer}>
+                            {/* 🌟 Cabeçalho do Pedido */}
+                            <div className={styles.pedidoHeader}>
+                                <span>Pedido <b>#{pedidoId}</b></span>
                             </div>
-                        );
-                    })
-                )}
-            </div>
+
+                            {/* Lista de itens do pedido */}
+                            <ul className={styles.itensDoPedido}>
+                                {itensDoPedido.map((item: any) => {
+                                    const nomeDoProduto = item.nomeProduto || item.produto?.nome || 'Produto';
+                                    const statusItem = String(item.status || '').toUpperCase();
+                                    const isEntregue = statusItem === 'ENTREGUE' || statusItem === 'PRONTO' || item.entregue === true;
+                                    const isCancelado = statusItem === 'CANCELADO';
+
+                                    return (
+                                        <li key={item.id} className={`${styles.itemRow} ${isCancelado ? styles.itemRowCancelado : ''}`}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                                <div className={styles.itemInfo}>
+                                                <span className={styles.itemNome} style={isCancelado ? { textDecoration: 'line-through', color: 'var(--red)' } : {}}>
+                                                    {nomeDoProduto} {item.meiaPorcao && <span className={styles.meiaTag}>Meia</span>}
+                                                </span>
+                                                    <span className={styles.itemQtd}>x{item.quantidade}</span>
+                                                </div>
+
+                                                <div style={{ marginTop: '4px', fontSize: '0.8rem', color: 'var(--text-3)', display: 'flex', flexWrap: 'wrap', gap: '8px', fontStyle: 'italic' }}>
+                                                    {item.usuarioLancamentoItem && <span>Lançado: <b>{item.usuarioLancamentoItem}</b></span>}
+                                                    {item.usuarioResponsavelEntrega && <span>Entregue: <b>{item.usuarioResponsavelEntrega}</b></span>}
+                                                    {item.observacao && <span>Obs: {item.observacao}</span>}
+                                                </div>
+
+                                                {isCancelado && (
+                                                    <div style={{ marginTop: '4px', fontSize: '0.8rem', color: 'var(--red)' }}>
+                                                        <b>Motivo:</b> {item.motivoCancelamento} <i>({item.usuarioResponsavelEstorno})</i>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className={styles.itemRight}>
+                                                <div className={styles.itemActions}>
+                                                    {!isEntregue && !isCancelado ? (
+                                                        <button
+                                                            className={styles.btnEntregarItem}
+                                                            onClick={() => exec(() => pedidosApi.entregarItem(item.id))}
+                                                            title="Marcar como entregue"
+                                                        >
+                                                            ✓
+                                                        </button>
+                                                    ) : isEntregue && !isCancelado ? (
+                                                        <span className={styles.itemEntregueCheck}>✓</span>
+                                                    ) : <span className={styles.itemCanceladoBadge}>CANCELADO</span>}
+
+                                                    {isAdmin && !isCancelado && (
+                                                        <button className={styles.btnEstornarItem} onClick={() => setConfirmarEstorno({itemId: item.id, nome: nomeDoProduto})}>✕</button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </li>
+                    ))}
+                </ul>
+            )}
 
             <div className={styles.subtotal}>
                 <span>Subtotal</span>
                 <span>R$ {Number(comanda.total).toFixed(2).replace('.', ',')}</span>
             </div>
+
+
+            {/* MODAL DE CONFIRMAÇÃO DE ESTORNO */}
+            {confirmarEstorno && (
+                <div className={styles.obsBackdrop}>
+                    <div className={styles.obsModal}>
+                        <h3 style={{color: 'var(--red)', marginBottom: '0.5rem', marginTop: 0}}>Confirmar
+                            Cancelamento</h3>
+                        <p style={{color: 'var(--text-2)', fontSize: '0.9rem', marginBottom: '1rem'}}>
+                            Tem certeza que deseja cancelar <b>{confirmarEstorno.nome}</b>?
+                        </p>
+
+                        <div style={{textAlign: 'left', marginBottom: '1.5rem'}}>
+                            <label style={{fontSize: '0.85rem', color: 'var(--text-2)', fontWeight: 600}}>
+                                Motivo do cancelamento (obrigatório):
+                            </label>
+                            <textarea
+                                value={motivoEstorno}
+                                onChange={(e) => setMotivoEstorno(e.target.value)}
+                                placeholder={`Ex: Cliente desistiu, erro de digitação... (Mín. ${MIN_CARACTERES} carac.)`}
+                                rows={3}
+                                style={{
+                                    width: '100%', padding: '0.75rem', borderRadius: '8px',
+                                    border: '1px solid var(--border)', background: 'var(--bg-2)',
+                                    marginTop: '0.5rem', resize: 'none', color: 'var(--text)',
+                                    fontFamily: 'inherit', fontSize: '0.9rem'
+                                }}
+                                autoFocus
+                            />
+                            <div style={{
+                                fontSize: '0.75rem', textAlign: 'right', marginTop: '4px',
+                                color: motivoEstorno.trim().length < MIN_CARACTERES ? 'var(--red)' : 'var(--success)'
+                            }}>
+                                {motivoEstorno.trim().length}/{MIN_CARACTERES} caracteres
+                            </div>
+                        </div>
+
+                        <div className={styles.obsActions}>
+                            <button className={styles.btnCancelar} onClick={() => setConfirmarEstorno(null)}>
+                                Voltar
+                            </button>
+                            <button
+                                className={styles.btnConfirmar}
+                                style={{background: 'var(--red)'}}
+                                onClick={() => estornar(confirmarEstorno.itemId, motivoEstorno)}
+                                disabled={processandoItem === confirmarEstorno.itemId || motivoEstorno.trim().length < MIN_CARACTERES}
+                            >
+                                {processandoItem === confirmarEstorno.itemId ? 'Cancelando...' : 'Sim, cancelar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

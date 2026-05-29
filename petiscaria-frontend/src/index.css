@@ -8,12 +8,12 @@
   --bg: #09090b;          /* Fundo principal da tela (quase preto) */
   --bg-2: #18181b;        /* Fundo secundário (inputs, áreas de destaque) */
   --bg-3: #27272a;        /* Fundo de hover/interação */
-  --surface: #121214;     /* Fundo de Modais e Cards */
+  --surface: #191919;     /* Fundo de Modais e Cards */
   --surface-2: #1e1e20;   /* Elementos elevados dentro de modais */
 
   /* Textos: Brancos suaves (evita cansar a vista) */
   --text: #f8fafc;
-  --text-2: #a1a1aa;
+  --text-2: #ffffff;
   --text-3: #71717a;
 
   /* Bordas: Sutis para separar elementos sem pesar */
@@ -61,10 +61,10 @@
    ════════════════════════════════════════════════════════════════════════════════ */
 :root[data-theme="light"] {
   /* Backgrounds: Tons gelo e branco puro */
-  --bg: #f8fafc;          /* Fundo da tela (cinza levíssimo azulado) */
-  --bg-2: #f1f5f9;        /* Fundo secundário (inputs) */
+  --bg: #ffffff;          /* Fundo da tela (cinza levíssimo azulado) */
+  --bg-2: #ffffff;        /* Fundo secundário (inputs) */
   --bg-3: #e2e8f0;        /* Fundo de hover/interação */
-  --surface: #ffffff;     /* Modais e Cards brilhando em branco puro */
+  --surface: #f0f0f0;     /* Modais e Cards brilhando em branco puro */
   --surface-2: #f8fafc;   /* Áreas destacadas internas */
 
   /* Textos: Contrastes fortes para leitura impecável */

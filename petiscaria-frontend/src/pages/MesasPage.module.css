@@ -10,192 +10,195 @@
   padding: 1.5rem;
   min-height: 100vh;
   background: var(--bg);
-}
-/* ==========================================================================
-   HEADER DE RESUMO (STATS PREMIUM ALINHADO AOS CARDS)
-   ========================================================================== */
-
-/* Definição de Variáveis de Status */
-.summaryCard.disponivel  { --status-color: var(--text-3); --status-dim: rgba(113, 113, 122, 0.1); }
-.summaryCard.ocupada     { --status-color: var(--primary); --status-dim: var(--primary-dim); }
-.summaryCard.aguardando  { --status-color: var(--warning); --status-dim: var(--warning-dim); }
-
-.summary {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.summaryCard {
-  background: var(--surface);
-  border: 2px solid transparent; /* Borda transparente inicial para não "pular" */
-  border-radius: 24px;
-  padding: 1.5rem 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
-  overflow: hidden;
-}
-
-/* Efeito de "Luz de Fundo" (Glow sutil) */
-.summaryCard::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: radial-gradient(circle at top right, var(--status-dim), transparent 70%);
-  opacity: 0;
-  transition: opacity 0.4s;
-  pointer-events: none; /* Garante que não bloqueie o clique */
-}
-
-/* Estado de Hover (Sem sombra, apenas destaque de borda e escala) */
-.summaryCard:hover {
-  transform: translateY(-6px) scale(1.01);
-  border-color: var(--status-color);
-}
-
-.summaryCard:hover::before { opacity: 1; }
-
-/* Barra inferior (Assinatura do status) */
-.summaryCard::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 30%; right: 30%;
-  height: 4px;
-  background: var(--status-color);
-  border-radius: 4px 4px 0 0;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.summaryCard:hover::after {
-  left: 10%; right: 10%;
-  height: 6px;
-}
-
-/* Tipografia de Dados (Número agora assume a cor do status) */
-.summaryNum {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 3.2rem;
-  font-weight: 800;
-  color: var(--status-color); /* Integrado com a cor do status */
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
-.summaryLabel {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--text-3);
-  margin-top: 0.25rem;
 }
 
 /* ==========================================================================
-   TOOLBAR E FILTROS
+   BARRA DE BUSCA (Totalmente limpa, sem positions malucos)
    ========================================================================== */
-.filters {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  background: var(--surface);
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  margin-bottom: 1.5rem;
-}
-
-.filterGroup {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.filterBtn {
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--text-2);
-  font-size: 0.85rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.filterBtn.active {
-  background: var(--surface);
-  color: var(--accent);
-  box-shadow: var(--shadow-sm);
-}
-
 .actionsGroup {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
+  width: 100%;
+  max-width: 320px; /* Largura perfeita pro header */
 }
 
 .searchWrapper {
+  flex: 1;
   position: relative;
   display: flex;
   align-items: center;
 }
 
+.searchWrapper svg {
+  position: absolute;
+  left: 1rem;
+  color: var(--text-2);
+  pointer-events: none;
+}
+
 .searchInput {
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.8rem;
+  border-radius: 12px;
   border: 1px solid var(--border);
-  background: var(--bg-2);
+  background: var(--surface);
   color: var(--text);
-  font-size: 0.9rem;
-  width: 250px;
-  transition: all 0.2s;
+  font-size: 0.95rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-sm);
 }
 
 .searchInput:focus {
   outline: none;
-  border-color: var(--accent);
-  width: 300px;
-  background: var(--surface);
-}
-
-.searchInput::placeholder {
-  color: var(--text-2);
-  opacity: 0.5;
-}
-
-.refreshBtn {
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 1.2rem;
-  transition: all 0.2s;
-}
-
-.refreshBtn:hover {
-  background: var(--surface-2);
-  border-color: var(--accent);
-  color: var(--accent);
-  transform: rotate(180deg);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
 }
 
 /* ==========================================================================
-   GRID DE MESAS E ESTADOS
+   1. CARDS DE MÉTRICAS (Nome 90 graus + Número Centralizado)
+   ========================================================================== */
+.metricFiltersContainer {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.metricCard {
+  --card-color: var(--text-2);
+  --card-bg-dim: transparent;
+
+  background: var(--surface);
+  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 0.75rem 1rem;
+  height: 100px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  outline: none;
+}
+
+/* Glow Sutil no Fundo */
+.metricCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at right, var(--card-bg-dim), transparent 80%);
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+}
+
+/* Barra lateral animada */
+.metricCard::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 30%; bottom: 30%;
+  width: 4px;
+  background: var(--card-color);
+  border-radius: 0 4px 4px 0;
+  opacity: 0.3;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.metricCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(255, 255, 255, 0.03);
+}
+.metricCard:hover::before { opacity: 0.5; }
+.metricCard:hover::after { top: 20%; bottom: 20%; opacity: 0.6; width: 5px; }
+
+/* ── NOME EM 90 GRAUS ── */
+.metricLabel {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-3);
+  margin: 0;
+  transition: color 0.3s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* ── NÚMERO ── */
+.metricNumber {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 2.6rem;
+  font-weight: 800;
+  color: var(--card-color);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  transition: color 0.3s ease;
+  flex: 1;
+  text-align: center;
+}
+
+/* ── ESTADOS ATIVOS ── */
+.metricCard[class*="active"] {
+  border-color: var(--card-color);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.metricCard[class*="active"]::before { opacity: 1; }
+.metricCard[class*="active"]::after {
+  top: 0; bottom: 0;
+  width: 6px;
+  opacity: 1;
+  border-radius: 0;
+}
+.metricCard[class*="active"] .metricLabel { color: var(--card-color); }
+
+/* ── ESTADOS ATIVOS (Cores Personalizadas) ── */
+
+/* Todas: Branco/Neutro */
+.activeTodas {
+  --card-color: var(--text);
+  --card-bg-dim: rgba(255, 255, 255, 0.05);
+  background: var(--bg-2);
+}
+
+/* Disponível: Verde */
+.activeDISPONIVEL {
+  --card-color: var(--success);
+  --card-bg-dim: var(--success-dim);
+  background: var(--surface);
+}
+
+/* Ocupada: Laranja */
+.activeOCUPADA {
+  --card-color: var(--warning);
+  --card-bg-dim: var(--warning-dim);
+  background: var(--surface);
+}
+
+/* Aguardando Pagamento: Azul */
+.activeAGUARDANDO_PAGAMENTO {
+  --card-color: var(--primary);
+  --card-bg-dim: var(--primary-dim);
+  background: var(--surface);
+}
+
+/* Fallback para status desconhecidos */
+.activeDefault {
+  --card-color: var(--text);
+  --card-bg-dim: rgba(255, 255, 255, 0.05);
+  background: var(--bg-2);
+}
+
+/* ==========================================================================
+   3. GRID DE MESAS E ESTADOS
    ========================================================================== */
 .content {
   flex: 1;
@@ -203,25 +206,28 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 1.5rem;
+  align-content: start;
 }
 
-.loading, .empty {
+.loadingState, .emptyState {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 5rem 0;
+  padding: 8rem 0;
   color: var(--text-2);
-  gap: 1rem;
+  gap: 1.5rem;
+  font-weight: 500;
+  text-align: center;
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid var(--border);
-  border-top-color: var(--accent);
+  width: 44px;
+  height: 44px;
+  border: 4px solid var(--border-2);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -234,97 +240,40 @@
    RESPONSIVIDADE (MOBILE FIRST / ADJUSTMENTS)
    ========================================================================== */
 @media (max-width: 768px) {
-  .page {
-    padding: 0.75rem;
-    gap: 1rem;
+  .page { padding: 1rem; gap: 1.25rem; }
+
+  /* Como no mobile não tem Portal, a busca cai pra dentro da página,
+     então damos margem inferior nela. */
+  .actionsGroup {
+    max-width: 100%;
+    margin-bottom: 0.5rem;
   }
 
-  /* 1. Stats Compactos e Centralizados */
-  .summary {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    width: 100%;
+  .searchInput {
+    max-width: 100%;
+    font-size: 0.9rem;
   }
 
-  .summaryCard {
-    padding: 0.75rem 0.25rem;
-    min-height: 80px;
+  .metricFiltersContainer {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .metricCard {
+    padding: 1rem 1.25rem;
     border-radius: 16px;
   }
 
-  /* Linha indicadora vai para o topo no mobile */
-  .summaryCard::after {
-    width: 100%;
-    height: 3px;
-    bottom: auto;
-  }
+  .metricNumber { font-size: 2.5rem; }
+  .metricLabel { font-size: 0.7rem; letter-spacing: 0.1em; }
 
-  .summaryNum { font-size: 1.6rem; }
-  .summaryLabel { font-size: 0.6rem; }
-
-  /* 2. Toolbar Mobile */
-  .filters {
-    flex-direction: column;
-    align-items: stretch;
-    background: transparent;
-    border: none;
-    padding: 0;
-    gap: 1rem;
-  }
-
-  /* 3. Filtros Centralizados e Abreviados */
-  .filterGroup {
-    display: flex;
-    justify-content: center; /* Centraliza a linha de filtros */
-    gap: 6px;
-    width: 100%;
-    overflow-x: auto;
-    padding: 4px 0;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  .filterGroup::-webkit-scrollbar { display: none; }
-
-  .filterBtn {
-    flex: 1; /* Faz os botões ocuparem espaço igual */
-    max-width: 90px; /* Impede que fiquem muito largos em telas médias */
-    background: var(--surface);
-    border: 1px solid var(--border);
-    padding: 0.6rem 0.2rem;
-  }
-
-  /* Mágica da Abreviação via data-short */
-  .filterBtn span { display: none; }
-  .filterBtn::after {
-    content: attr(data-short);
-    font-size: 0.75rem;
-    display: block;
-  }
-
-  /* 4. Busca ocupando a largura total */
-  .actionsGroup {
-    width: 100%;
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .searchWrapper { flex: 1; }
-  .searchInput {
-    width: 100% !important;
-    height: 44px;
-    font-size: 0.8rem;
-  }
-
-  /* 5. Grid de Mesas Mobile (2 colunas) */
   .grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 0.8rem;
+    gap: 0.75rem;
   }
 }
 
-/* Ajuste fino para telas MUITO pequenas */
 @media (max-width: 380px) {
-  .summaryLabel { display: none; }
-  .summaryCard { min-height: 60px; }
-  .filterBtn::after { font-size: 0.65rem; }
+  .metricNumber { font-size: 1.8rem; }
+  .metricLabel { font-size: 0.6rem; }
 }

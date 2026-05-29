@@ -17,6 +17,7 @@ async function request<T>(
     options: RequestInit = {}
 ): Promise<T> {
     const token = getToken();
+    console.log(`Requisição para: ${path}`, { token: !!token, options });
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(options.headers as Record<string, string>),
@@ -99,8 +100,8 @@ export const comandasApi = {
             body: JSON.stringify({ itens: itensParaEnviar }), // Empacota no DTO LancamentoLoteDTO
         }),
 
-    estornarItem: (comandaId: number, itemId: number) =>
-        request<Comanda>(`/api/comandas/${comandaId}/itens/${itemId}`, {
+    estornarItem: (comandaId: number, itemId: number, motivo: string) =>
+        request<Comanda>(`/api/comandas/${comandaId}/itens/${itemId}?motivo=${encodeURIComponent(motivo)}`, {
             method: 'DELETE',
         }),
 

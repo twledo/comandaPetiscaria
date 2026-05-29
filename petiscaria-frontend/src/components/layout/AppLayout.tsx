@@ -57,8 +57,8 @@ export default function AppLayout({ children, activePage, onNavigate }: Props) {
                         <div className={styles.userMeta}>
                             <span className={styles.userName}>{firstName}</span>
                             <span className={styles.userRole}>
-                {user?.cargo === 'ADMIN' ? 'Administrador' : 'Garçom'}
-              </span>
+                                {user?.cargo === 'ADMIN' ? 'Administrador' : 'Garçom'}
+                            </span>
                         </div>
                     </div>
 
@@ -75,21 +75,22 @@ export default function AppLayout({ children, activePage, onNavigate }: Props) {
 
             {/* Main */}
             <div className={styles.main}>
-                <header className={styles.topbar}>
-                    <button
-                        className={styles.menuBtn}
-                        onClick={() => setSidebarOpen(o => !o)}
-                    >
-                        ☰
-                    </button>
-                    <h2 className={styles.pageTitle}>
-                        {activePage === 'mesas' ? 'Mapa de Mesas' : 'Gestão de Produtos'}
-                    </h2>
-                    <div className={styles.topbarRight}>
-            <span className={styles.topbarBadge}>
-              {user?.cargo === 'ADMIN' ? '👑 Admin' : '🍽️ Garçom'}
-            </span>
+                {/* 👇 CABEÇALHO MODIFICADO AQUI 👇 */}
+                <header className={styles.topbar} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <button
+                            className={styles.menuBtn}
+                            onClick={() => setSidebarOpen(o => !o)}
+                        >
+                            ☰
+                        </button>
+                        <h2 className={styles.pageTitle} style={{ margin: 0 }}>
+                            {activePage === 'mesas' ? 'Mapa de Mesas' : 'Gestão de Produtos'}
+                        </h2>
                     </div>
+
+                    {/* 👇 O "BURACO DE MINHOCA" DO PORTAL FICA AQUI 👇 */}
+                    <div id="topbar-actions" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', paddingRight: '1rem' }}></div>
                 </header>
 
                 <main className={styles.content}>
@@ -98,4 +99,4 @@ export default function AppLayout({ children, activePage, onNavigate }: Props) {
             </div>
         </div>
     );
-}   
+}

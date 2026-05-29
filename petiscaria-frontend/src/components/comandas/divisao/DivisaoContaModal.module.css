@@ -240,7 +240,7 @@ input[type="number"] { -moz-appearance: textfield; }
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
-    background: var(--bg-2);
+    background: var(--bg-3);
     border: 2px solid transparent; /* Preparado para o hover vibrante */
     border-radius: 16px;
     cursor: pointer;
@@ -257,6 +257,8 @@ input[type="number"] { -moz-appearance: textfield; }
     border-color: var(--border);
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04);
 }
+
+
 
 /* Estado Selecionado/Pago */
 .itemRowSelected {
@@ -324,6 +326,16 @@ input[type="number"] { -moz-appearance: textfield; }
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
+}
+
+.meiaTag {
+    font-size: 0.7rem;
+    background-color: var(--warning); /* ou a cor que você usa para meia porção */
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px; /* Dá um respiro entre o nome e a tag */
+    font-weight: bold;
 }
 
 .itemName {

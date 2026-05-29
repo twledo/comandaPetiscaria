@@ -1,148 +1,195 @@
-/* ── PADRÃO DE CARD (Baseado no design Ocupada) ── */
+/* ==========================================================================
+   PADRÃO DO CARD DE MESA (Minimalista e Premium)
+   ========================================================================== */
 .card {
+  height: 160px;
   background: var(--surface);
-  border: 2px solid transparent; /* Borda invisível para não saltar o layout */
-  border-radius: 20px;
-  padding: 1.5rem;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  justify-content: space-between; /* Mantém os itens nas extremidades */
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
 }
 
-/* Efeito de Destaque no Hover (Uniforme para todos) */
+/* Efeito de Destaque no Hover */
 .card:hover {
-  transform: translateY(-4px) scale(1.02);
-  border-color: var(--status-color); /* A borda assume a cor do status */
-  background-image: radial-gradient(circle at top right, var(--status-dim) 0%, transparent 100%);
+  transform: translateY(-4px);
+  border-color: var(--card-color);
+  box-shadow: var(--shadow-md);
 }
 
-/* ── DEFINIÇÃO DE CORES POR STATUS ── */
-
-/* DISPONÍVEL (Cinza) */
-.card.disponivel { --status-color: var(--text-3); --status-dim: rgba(113, 113, 122, 0.1); }
-.disponivel .dot { background: var(--text-3); }
-
-/* OCUPADA (Azul) */
-.card.ocupada { --status-color: var(--primary); --status-dim: var(--primary-dim); }
-.ocupada .dot { background: var(--primary); box-shadow: 0 0 8px var(--primary-dim); }
-
-/* AGUARDANDO PAGAMENTO (Laranja/Âmbar) */
-.card.aguardando-pagamento { --status-color: var(--warning); --status-dim: var(--warning-dim); }
-.aguardando-pagamento .dot { background: var(--warning); box-shadow: 0 0 8px var(--warning-dim); }
-
-/* ── AJUSTES DE ELEMENTOS INTERNOS ── */
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
+/* Barra superior animada indicando a cor do status */
+.topBar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--card-color);
+  opacity: 0.5;
+  transition: opacity 0.3s ease, height 0.3s ease;
 }
 
-.statusLabel {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--status-color); /* O texto do status agora segue a cor da borda */
+.card:hover .topBar {
+  opacity: 1;
+  height: 6px;
 }
+
+/* Glow interno (luz de fundo sutil com a cor do status) */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at top right, var(--card-dim), transparent 125%);
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+}
+
+.card:hover::before { opacity: 0.6; }
+
+/* ==========================================================================
+   MAPEAMENTO DE CORES (O Segredo da Dinâmica)
+   ========================================================================== */
+
+/* DISPONÍVEL = Verde */
+.DISPONIVEL {
+  --card-color: var(--success);
+  --card-dim: var(--success-dim);
+}
+
+/* OCUPADA = Laranja (Warning) */
+.OCUPADA {
+  --card-color: var(--warning);
+  --card-dim: var(--warning-dim);
+}
+
+/* AGUARDANDO PAGAMENTO = Azul (Primary) */
+.AGUARDANDO_PAGAMENTO {
+  --card-color: var(--primary);
+  --card-dim: var(--primary-dim);
+}
+
+/* Fallback */
+.DEFAULT {
+  --card-color: var(--text-2);
+  --card-dim: rgba(255, 255, 255, 0.05);
+}
+
+/* ==========================================================================
+   ESTRUTURA INTERNA (Header, Body, Footer)
+   ========================================================================== */
 
 .header {
   display: flex;
-  flex-direction: column; /* Força um embaixo do outro */
-  align-items: flex-start; /* Alinha tudo à esquerda */
-  width: 100%;
-  gap: 6px; /* Espaço entre o status e o nome */
-  margin-bottom: 0.5rem;
+  flex-direction: column;
+  gap: 0.25rem; /* Reduzido para ficar mais compacto */
+  z-index: 1;
 }
 
-.statusGroup {
+/* Badge do Status (Ex: • OCUPADA) */
+.statusBadge {
   display: flex;
   align-items: center;
-  gap: 8px;
-  /* Removemos o flex-shrink aqui pois agora ele tem a linha toda só para ele */
-}
-
-.clienteNome {
-  font-size: 0.75rem;
+  gap: 6px;
+  font-size: 0.7rem;
   font-weight: 800;
-  color: var(--primary);
-  background: var(--primary-dim);
-  padding: 4px 10px;
-  border-radius: 8px;
-
-  /* Removemos o truncamento para o nome aparecer inteiro em várias linhas se necessário */
-  white-space: normal;
-  word-break: break-word;
-
-  display: inline-block; /* Ajusta o fundo azul ao tamanho do texto */
-  max-width: 100%;
-  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--card-color);
 }
 
 .dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  flex-shrink: 0;
+  background: var(--card-color);
+  box-shadow: 0 0 8px var(--card-dim);
 }
 
-.statusLabel {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--text-2);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
+/* Número da Mesa */
 .numero {
-  font-family: 'DM Sans', sans-serif; /* Usando a fonte Syne que configuramos */
-  font-size: 2.2rem; /* Reduzi levemente de 3.5rem para caber a palavra 'Mesa' */
+  font-family: 'DM Sans', sans-serif;
+  font-size: 2.2rem;
   font-weight: 800;
   line-height: 1;
   color: var(--text);
-  margin-top: 0.5rem;
-  letter-spacing: -0.04em;
-  text-transform: uppercase; /* Opcional: deixa um visual mais "crachá" */
+  margin: 0;
+  letter-spacing: -0.03em;
 }
 
-.total {
-  font-size: 1.1rem;
-  font-weight: 800;
-  color: var(--text);
-  margin-top: 0.25rem;
+.prefix {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-3);
+  vertical-align: middle;
+  margin-right: 0.25rem;
 }
 
-.action {
-  font-size: 0.8rem;
-  color: var(--text-2);
-  margin-top: auto;
-  border-top: 1px solid var(--border);
-  padding-top: 0.6rem;
-  width: 100%;
+.body {
+  /* Removemos o flex: 1 daqui */
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center; /* Centraliza verticalmente o nome no espaço disponível */
+  min-height: 24px;   /* Altura mínima para não colapsar */
+  z-index: 1;
+}
+
+.clienteNome {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  border-left: 3px solid var(--card-color);
+  padding-left: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%; /* Garante que o truncamento funcione */
+}
+
+.clienteEmpty {
+  font-size: 0.85rem;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border-2);
+  /* O margin-top: auto já cuida de tudo aqui */
 }
 
 .atendente {
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--text-3); /* Cor um pouco mais discreta */
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%; /* Garante que o nome do atendente não esmague o valor */
 }
 
-.atendenteNome {
-  color: var(--primary); /* Destaca levemente o nome em azul */
+.total {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: var(--card-color);
+  white-space: nowrap;
+}zz
+
+.atendente strong {
+  color: var(--text);
   font-weight: 700;
 }
 
-/* Dá um "acendimento" sutil no texto do rodapé quando passa o mouse na mesa */
-.card:hover .action {
-  color: var(--text);
+.totalZero {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-3);
+  opacity: 0.5;
 }

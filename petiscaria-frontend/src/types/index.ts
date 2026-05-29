@@ -18,6 +18,7 @@ export interface ItemPedido {
     totalItem: number;
     meiaPorcao: boolean;
     observacao?: string;
+    status: string;
     produto: Produto;
 }
 
@@ -25,7 +26,7 @@ export interface Comanda {
     id: number;
     mesa: Mesa;
     nomeCliente?: string;
-    ulimoAtendente?: string;
+    ultimoAtendente?: string;
     total: number;
     itens: ItemPedido[];
     createdAt: string;

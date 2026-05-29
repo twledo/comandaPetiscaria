@@ -1,19 +1,26 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom"; // 👈 PORTAL AQUI
 import { mesasApi, dominiosApi } from '../api';
-import type { Opcao } from '../api'; // <--- Faltou o "type" bem aqui!
+import type { Opcao } from '../api';
 import type { Mesa, StatusMesa } from '../types';
 import MesaCard from '../components/mesas/MesaCard';
 import MesaModal from '../components/mesas/MesaModal';
 import styles from './MesasPage.module.css';
 import { useMesasWebSocket } from "../hook/useMesasWebSocket";
-import {useCallback, useEffect, useMemo, useState} from "react";
+
+const IconSearch = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
 
 export default function MesasPage() {
     const [mesas, setMesas] = useState<Mesa[]>([]);
-    const [statusOpcoes, setStatusOpcoes] = useState<Opcao[]>([]); // <-- FILTROS DINÂMICOS
+    const [statusOpcoes, setStatusOpcoes] = useState<Opcao[]>([]);
     const [busca, setBusca] = useState('');
     const [filtro, setFiltro] = useState<StatusMesa | 'TODAS'>('TODAS');
     const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
     const [loading, setLoading] = useState(true);
+
+    // Controle Responsivo e do Portal
+    const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
+    const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -28,10 +35,20 @@ export default function MesasPage() {
     }, []);
 
     useEffect(() => {
-        // Busca os status do backend
-        dominiosApi.buscarTodos().then(res => setStatusOpcoes(res.statusMesa)).catch(console.error);
+        dominiosApi.buscarTodos()
+            .then(res => setStatusOpcoes(res.statusMesa))
+            .catch(console.error);
         load();
     }, [load]);
+
+    useEffect(() => {
+        // Pega o elemento do AppLayout assim que a página carregar
+        setPortalTarget(document.getElementById('topbar-actions'));
+
+        const handleResize = () => setIsDesktop(window.innerWidth > 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useMesasWebSocket(useCallback((listaAtualizada: Mesa[]) => {
         setMesas(listaAtualizada);
@@ -42,31 +59,29 @@ export default function MesasPage() {
             const mesaAtualizada = mesas.find(m => m.id === selectedMesa.id);
 
             if (mesaAtualizada) {
-                // 🛑 A MÁGICA ESTÁ AQUI (Proteção contra o WebSocket):
-                // Se a mesa estava ocupada e de repente o websocket avisou que ela ficou DISPONIVEL
-                // (porque foi paga), a gente FECHA o modal na raiz. Isso mata o bug do "Novo Atendimento".
                 if (selectedMesa.status !== 'DISPONIVEL' && mesaAtualizada.status === 'DISPONIVEL') {
                     setSelectedMesa(null);
                     return;
                 }
-
-                // Se mudou outra coisa (ex: lançou um item novo), atualiza normal
                 if (JSON.stringify(mesaAtualizada) !== JSON.stringify(selectedMesa)) {
                     setSelectedMesa(mesaAtualizada);
                 }
             } else {
-                // Se a mesa sumir do banco de dados por algum motivo
                 setSelectedMesa(null);
             }
         }
     }, [mesas, selectedMesa]);
 
     const { filtered, counts } = useMemo(() => {
-        const countsObj = { DISPONIVEL: 0, OCUPADA: 0, AGUARDANDO_PAGAMENTO: 0 };
+        const countsObj: Record<string, number> = { TODAS: mesas.length };
+        statusOpcoes.forEach(opt => { countsObj[opt.value] = 0; });
 
         const filteredList = mesas.filter(mesa => {
-            const statusNormalizado = mesa.status?.toUpperCase() as keyof typeof countsObj;
-            if (statusNormalizado in countsObj) countsObj[statusNormalizado]++;
+            const statusNormalizado = mesa.status?.toUpperCase();
+
+            if (countsObj[statusNormalizado] !== undefined) {
+                countsObj[statusNormalizado]++;
+            }
 
             const matchStatus = filtro === 'TODAS' || statusNormalizado === filtro;
             const nomeCliente = mesa.comandaAtiva?.nomeCliente?.toLowerCase() || '';
@@ -76,83 +91,85 @@ export default function MesasPage() {
         });
 
         return { filtered: filteredList, counts: countsObj };
-    }, [mesas, filtro, busca]);
+    }, [mesas, filtro, busca, statusOpcoes]);
 
-    // Função para traduzir o status da mesa de forma dinâmica para o Card
     const getStatusLabel = (status: string) => {
         return statusOpcoes.find(s => s.value === status)?.label || status;
     };
 
+    const getShortLabel = (value: string) => {
+        switch (value) {
+            case 'DISPONIVEL': return 'Disp.';
+            case 'OCUPADA': return 'Ocup.';
+            case 'AGUARDANDO_PAGAMENTO': return 'A. Pgto.';
+            default: return value.substring(0, 6) + '.';
+        }
+    };
+
+    // 👇 ISOLAMOS A BARRA DE BUSCA NUMA CONSTANTE
+    const searchBarElement = (
+        <div className={styles.actionsGroup}>
+            <div className={styles.searchWrapper}>
+                <IconSearch />
+                <input
+                    type="text"
+                    placeholder="Buscar mesa ou cliente..."
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    className={styles.searchInput}
+                />
+            </div>
+        </div>
+    );
+
     return (
         <div className={styles.page}>
-            <header className={styles.summary}>
-                <div className={`${styles.summaryCard} ${styles.disponivel}`}>
-                    <span className={styles.summaryNum}>{counts.DISPONIVEL}</span>
-                    <span className={styles.summaryLabel}>Disponíveis</span>
-                </div>
 
-                <div className={`${styles.summaryCard} ${styles.ocupada}`}>
-                    <span className={styles.summaryNum}>{counts.OCUPADA}</span>
-                    <span className={styles.summaryLabel}>Ocupadas</span>
-                </div>
+            {/* 👇 TELETRANSPORTE (PORTAL) 👇 */}
+            {/* Se for PC e achar o cabeçalho global, joga pra lá. Se for celular, renderiza aqui normal. */}
+            {isDesktop && portalTarget
+                ? createPortal(searchBarElement, portalTarget)
+                : searchBarElement
+            }
 
-                <div className={`${styles.summaryCard} ${styles.aguardando}`}>
-                    <span className={styles.summaryNum}>{counts.AGUARDANDO_PAGAMENTO}</span>
-                    <span className={styles.summaryLabel}>Aguard. Pgto</span>
-                </div>
-            </header>
+            {/* ── 2. CARDS DE MÉTRICAS ── */}
+            <section className={styles.metricFiltersContainer}>
+                <button
+                    type="button"
+                    className={`${styles.metricCard} ${filtro === 'TODAS' ? styles.activeTodas : ''}`}
+                    onClick={() => setFiltro('TODAS')}
+                >
+                    <span className={styles.metricLabel}>Todas</span>
+                    <span className={styles.metricNumber}>{counts.TODAS || 0}</span>
+                </button>
 
-            <nav className={styles.filters}>
-                <div className={styles.filterGroup}>
-                    {/* Botão Fixo de Todas */}
-                    <button
-                        className={`${styles.filterBtn} ${filtro === 'TODAS' ? styles.active : ''}`}
-                        onClick={() => setFiltro('TODAS')}
-                        data-full="Todas"
-                        data-short="Todas"
-                    > <span>Todas</span>
-                    </button>
-                    {/* Filtros Dinâmicos */}
-                    {statusOpcoes.map(f => (
+                {statusOpcoes.map(f => {
+                    const colorClass = styles[`active${f.value}`] || styles.activeDefault;
+
+                    return (
                         <button
                             key={f.value}
-                            className={`${styles.filterBtn} ${filtro === f.value ? styles.active : ''}`}
+                            type="button"
+                            className={`${styles.metricCard} ${filtro === f.value ? colorClass : ''}`}
                             onClick={() => setFiltro(f.value as StatusMesa)}
-                            // Passamos o label do banco e uma versão curta via data-attribute
-                            data-full={f.label}
-                            data-short={
-                                f.value === 'AGUARDANDO_PAGAMENTO' ? 'Aguar. Pgt.' :        
-                                    f.label.substring(0, 5) + '.'
-                            }
                         >
-                            <span>{f.label}</span>
+                            <span className={styles.metricLabel}>{getShortLabel(f.value)}</span>
+                            <span className={styles.metricNumber}>{counts[f.value] || 0}</span>
                         </button>
-                    ))}
-                </div>
+                    );
+                })}
+            </section>
 
-                <div className={styles.actionsGroup}>
-                    <div className={styles.searchWrapper}>
-                        <input
-                            type="text"
-                            placeholder="Buscar mesa ou cliente..."
-                            value={busca}
-                            onChange={(e) => setBusca(e.target.value)}
-                            className={styles.searchInput}
-                        />
-                    </div>
-                    <button className={styles.refreshBtn} onClick={load} title="Atualizar agora">↻</button>
-                </div>
-            </nav>
-
+            {/* ── 3. LISTAGEM DE MESAS ── */}
             <main className={styles.content}>
                 {loading ? (
-                    <div className={styles.loading}>
+                    <div className={styles.loadingState}>
                         <span className={styles.spinner} />
-                        <p>Carregando mesas...</p>
+                        <p>Carregando mapa de mesas...</p>
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div className={styles.empty}>
-                        <p>Nenhuma mesa encontrada.</p>
+                    <div className={styles.emptyState}>
+                        <p>Nenhuma mesa encontrada para este filtro.</p>
                     </div>
                 ) : (
                     <div className={styles.grid}>
@@ -171,7 +188,7 @@ export default function MesasPage() {
             {selectedMesa && (
                 <MesaModal
                     mesa={selectedMesa}
-                    statusLabel={getStatusLabel(selectedMesa.status)} // <-- Passando pro Modal também
+                    statusLabel={getStatusLabel(selectedMesa.status)}
                     onClose={() => setSelectedMesa(null)}
                     onRefresh={async () => { await load(); }}
                 />

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { produtosApi, comandasApi, dominiosApi } from '../../api';
 import type { Opcao } from '../../api';
 import type { Comanda, Mesa, Produto } from '../../types';
@@ -11,7 +11,6 @@ interface Props {
     onRefresh: () => Promise<void>;
 }
 
-// Estendemos o tipo localmente para garantir que o TypeScript aceite a observação
 export type ItemDoCarrinho = {
     produto: Produto;
     quantidade: number;
@@ -37,6 +36,12 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
     const [loading, setLoading] = useState(true);
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState('');
+
+    const gerarChave = useCallback((produtoId: number, meiaPorcao: boolean, observacao?: string) => {
+        const obsFormatada = observacao ? observacao.trim().replace(/\s+/g, '-').toLowerCase() : 'sem-obs';
+        const porcao = meiaPorcao ? 'meia' : 'inteira';
+        return `item-${produtoId}-${porcao}-${obsFormatada}`;
+    }, []);
 
     useEffect(() => {
         dominiosApi.buscarTodos().then(res => setCategorias(res.categorias)).catch(console.error);
@@ -67,18 +72,15 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
 
         const { produto, meiaPorcao } = produtoParaObservacao;
         const obsFinal = observacaoTemp.trim() !== '' ? observacaoTemp.trim() : undefined;
+        const chaveNova = gerarChave(produto.id, meiaPorcao, obsFinal);
 
         setCarrinho(prev => {
-            // Verifica se já existe um item EXATAMENTE igual (mesmo id, porção e observação)
-            const exist = prev.find(i =>
-                i.produto.id === produto.id &&
-                i.meiaPorcao === meiaPorcao &&
-                i.observacao === obsFinal
-            );
+            // Usa a mesma lógica da chave para garantir correspondência exata
+            const exist = prev.find(i => gerarChave(i.produto.id, i.meiaPorcao, i.observacao) === chaveNova);
 
             if (exist) {
                 return prev.map(i =>
-                    i.produto.id === produto.id && i.meiaPorcao === meiaPorcao && i.observacao === obsFinal
+                    gerarChave(i.produto.id, i.meiaPorcao, i.observacao) === chaveNova
                         ? { ...i, quantidade: i.quantidade + 1 }
                         : i
                 );
@@ -93,9 +95,11 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
     // ─── Controles do Carrinho ──────────────────────────────────────────────────
 
     function alterarQuantidadeCarrinho(produtoId: number, meiaPorcao: boolean, observacao: string | undefined, delta: number) {
+        const chaveAlvo = gerarChave(produtoId, meiaPorcao, observacao);
+
         setCarrinho(prev =>
             prev.map(i =>
-                i.produto.id === produtoId && i.meiaPorcao === meiaPorcao && i.observacao === observacao
+                gerarChave(i.produto.id, i.meiaPorcao, i.observacao) === chaveAlvo
                     ? { ...i, quantidade: i.quantidade + delta }
                     : i
             ).filter(i => i.quantidade > 0)
@@ -110,7 +114,8 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
     // ─── Envio para a API ───────────────────────────────────────────────────────
 
     async function confirmar() {
-        if (carrinho.length === 0) return;
+        if (carrinho.length === 0 || enviando) return;
+
         setEnviando(true);
         setError('');
 
@@ -119,11 +124,16 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                 produtoId: item.produto.id,
                 quantidade: item.quantidade,
                 meiaPorcao: item.meiaPorcao || false,
-                observacao: item.observacao || null // Envia a observação para o backend
+                observacao: item.observacao || null
             }));
 
+            // 1. Envia para a API e aguarda
             await comandasApi.lancarItens(comanda.id, itensParaEnviar);
 
+            // 2. ⏱️ Pequena pausa estratégica para segurança de concorrência do banco
+            await new Promise(resolve => setTimeout(resolve, 400));
+
+            // 3. Atualiza e fecha
             await onRefresh();
             onClose();
         } catch (e: any) {
@@ -135,7 +145,8 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
 
     return (
         <div className={styles.backdrop} onClick={e => e.target === e.currentTarget && onClose()}>
-            <div className={`${styles.modal} animate-scale`}>
+            {/* Removi a classe 'animate-scale' daqui temporariamente para evitar conflitos de renderização no DOM */}
+            <div className={styles.modal}>
 
                 {/* ── HEADER ── */}
                 <div className={styles.header}>
@@ -143,7 +154,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                         <h2 className={styles.title}>Lançar Itens</h2>
                         <p className={styles.subtitle}>Mesa {mesa.numero} · Comanda #{comanda.id}</p>
                     </div>
-                    <button className={styles.closeBtn} onClick={onClose}>✕</button>
+                    <button type="button" className={styles.closeBtn} onClick={onClose}>✕</button>
                 </div>
 
                 {/* ── BODY ── */}
@@ -162,6 +173,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
 
                         <div className={styles.catFilters}>
                             <button
+                                type="button"
                                 className={`${styles.catBtn} ${categoria === '' ? styles.active : ''}`}
                                 onClick={() => setCategoria('')}
                             >
@@ -170,6 +182,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                             {categorias.map(c => (
                                 <button
                                     key={c.value}
+                                    type="button"
                                     className={`${styles.catBtn} ${categoria === c.value ? styles.active : ''}`}
                                     onClick={() => setCategoria(c.value)}
                                 >
@@ -185,13 +198,12 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                         ) : (
                             <div className={styles.produtosList}>
                                 {produtos.map(produto => {
-                                    // Total de itens desse produto no carrinho (independente de meia/inteira ou obs)
                                     const qtdCarrinho = carrinho
                                         .filter(i => i.produto.id === produto.id)
                                         .reduce((s, i) => s + i.quantidade, 0);
 
                                     return (
-                                        <div key={produto.id} className={styles.produtoCard}>
+                                        <div key={`produto-${produto.id}`} className={styles.produtoCard}>
                                             <div className={styles.produtoInfo}>
                                                 <span className={styles.produtoNome}>{produto.nome}</span>
                                                 {produto.descricao && (
@@ -207,6 +219,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                                                     <span className={styles.qtdBadge}>{qtdCarrinho}</span>
                                                 )}
                                                 <button
+                                                    type="button"
                                                     className={styles.addBtn}
                                                     onClick={() => abrirModalObservacao(produto, false)}
                                                     title="Adicionar porção inteira"
@@ -215,11 +228,12 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                                                 </button>
                                                 {produto.permiteMeia && (
                                                     <button
+                                                        type="button"
                                                         className={`${styles.addBtn} ${styles.addBtnMeia}`}
                                                         onClick={() => abrirModalObservacao(produto, true)}
                                                         title="Adicionar meia porção"
                                                     >
-                                                        ½
+                                                        Meia
                                                     </button>
                                                 )}
                                             </div>
@@ -241,43 +255,62 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                             <p className={styles.carrinhoEmpty}>Selecione itens ao lado.</p>
                         ) : (
                             <ul className={styles.carrinhoList}>
-                                {carrinho.map(item => (
-                                    // Chave única considerando produto, porção e observação
-                                    <li key={`${item.produto.id}-${item.meiaPorcao}-${item.observacao || ''}`} className={styles.carrinhoItem}>
+                                {carrinho.map(item => {
+                                    // Geração da chave super estável
+                                    const itemKey = gerarChave(item.produto.id, item.meiaPorcao, item.observacao);
 
-                                        <div className={styles.carrinhoItemNome}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                {item.produto.nome}
-                                                {item.meiaPorcao && <span className={styles.meiaTag}>½</span>}
-                                            </div>
-                                        </div>
-
-                                        <div className={styles.carrinhoControls}>
-                                            <button
-                                                className={styles.controlBtn}
-                                                onClick={() => alterarQuantidadeCarrinho(item.produto.id, item.meiaPorcao, item.observacao, -1)}
-                                            >−</button>
-                                            <span>{item.quantidade}</span>
-                                            {/* O botão de + no carrinho não pede observação novamente, só soma a quantidade daquele item idêntico */}
-                                            <button
-                                                className={styles.controlBtn}
-                                                onClick={() => alterarQuantidadeCarrinho(item.produto.id, item.meiaPorcao, item.observacao, 1)}
-                                            >+</button>
-
-                                            {/* Exibe a observação se existir */}
-                                            {item.observacao && (
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-2)', marginLeft: '5px', marginTop: '2px' }}>
-                                                    Obs: {item.observacao}
+                                    return (
+                                        <li key={itemKey} className={styles.carrinhoItem}>
+                                            <div className={styles.carrinhoItemNome}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    {item.produto?.nome ?? 'Produto Desconhecido'}
+                                                    {item.meiaPorcao && <span className={styles.meiaTag}>Meia</span>}
                                                 </div>
-                                            )}
-                                        </div>
+                                            </div>
 
-                                        <span className={styles.carrinhoItemTotal}>
-                                            R$ {(Number(item.produto.preco) * (item.meiaPorcao ? TAXA_MEIA_PORCAO : 1) * item.quantidade)
-                                            .toFixed(2).replace('.', ',')}
-                                        </span>
-                                    </li>
-                                ))}
+                                            <div className={styles.carrinhoControls}>
+                                                <button
+                                                    type="button"
+                                                    className={styles.controlBtn}
+                                                    onClick={() => alterarQuantidadeCarrinho(item.produto.id, item.meiaPorcao, item.observacao, -1)}
+                                                >−</button>
+                                                <span>{item.quantidade}</span>
+                                                <button
+                                                    type="button"
+                                                    className={styles.controlBtn}
+                                                    onClick={() => alterarQuantidadeCarrinho(item.produto.id, item.meiaPorcao, item.observacao, 1)}
+                                                >+</button>
+
+                                                {item.observacao && (
+                                                    <div
+                                                        style={{
+                                                            fontSize: '0.75rem', // Aumentei um pouco para ficar mais legível
+                                                            color: 'var(--text-1)', // Cor um pouco mais forte que var(--text-2)
+                                                            backgroundColor: 'rgba(255, 255, 255, 0.05)', // Fundo sutil para destacar
+                                                            padding: '6px 8px',
+                                                            borderRadius: '6px',
+                                                            marginTop: '6px',
+                                                            marginBottom: '4px',
+                                                            marginRight: '4px',
+                                                            lineHeight: '1.2',
+                                                            wordBreak: 'break-word',
+                                                            maxWidth: '100%',
+                                                            borderLeft: '3px solid var(--primary)' // Faixa lateral para dar charme
+                                                        }}
+                                                    >
+                                                        <span style={{ fontWeight: 'bold', marginRight: '4px' }}>Obs:</span>
+                                                        {item.observacao}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <span className={styles.carrinhoItemTotal}>
+                                                R$ {(Number(item.produto.preco) * (item.meiaPorcao ? TAXA_MEIA_PORCAO : 1) * item.quantidade)
+                                                .toFixed(2).replace('.', ',')}
+                                            </span>
+                                        </li>
+                                    );
+                                })}
                             </ul>
                         )}
 
@@ -289,6 +322,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                                 </div>
                                 {error && <p className={styles.error}>{error}</p>}
                                 <button
+                                    type="button"
                                     className={styles.confirmarBtn}
                                     onClick={confirmar}
                                     disabled={enviando}
@@ -302,36 +336,53 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
             </div>
 
             {/* ── MODAL DE OBSERVAÇÃO (SOBREPOSTO) ── */}
+            {/* ── MODAL DE OBSERVAÇÃO (SOBREPOSTO) ── */}
             {produtoParaObservacao && (
                 <div className={styles.obsBackdrop}>
                     <div className={styles.obsModal}>
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text)' }}>
+                        <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', color: 'var(--text)' }}>
                             Adicionar {produtoParaObservacao.produto.nome}
                             {produtoParaObservacao.meiaPorcao && ' (Meia)'}
                         </h3>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             <label style={{ fontSize: '0.85rem', color: 'var(--text-2)', fontWeight: 600 }}>
                                 Observação (Opcional):
                             </label>
                             <textarea
-                                placeholder="Ex: Sem cebola, gelo e limão, bem passado..."
+                                placeholder="Ex: Sem cebola, gelo e limão..."
                                 value={observacaoTemp}
-                                onChange={(e) => setObservacaoTemp(e.target.value)}
+                                // 🌟 Limitador de caracteres no próprio onChange
+                                onChange={(e) => {
+                                    if (e.target.value.length <= 60) {
+                                        setObservacaoTemp(e.target.value);
+                                    }
+                                }}
                                 rows={3}
                                 className={styles.obsInput}
                                 autoFocus
                             />
+                            {/* 🌟 Contador Visual */}
+                            <div style={{
+                                fontSize: '0.75rem',
+                                textAlign: 'right',
+                                color: observacaoTemp.length >= 60 ? 'var(--red)' : 'var(--text-3)',
+                                fontWeight: observacaoTemp.length >= 60 ? 'bold' : 'normal'
+                            }}>
+                                {observacaoTemp.length}/60
+                            </div>
                         </div>
 
                         <div className={styles.obsActions}>
                             <button
+                                type="button"
                                 onClick={() => setProdutoParaObservacao(null)}
                                 className={styles.btnCancelar}
                             >
                                 Cancelar
                             </button>
                             <button
+                                type="button"
                                 onClick={confirmarAdicaoComObservacao}
                                 className={styles.btnConfirmar}
                             >
