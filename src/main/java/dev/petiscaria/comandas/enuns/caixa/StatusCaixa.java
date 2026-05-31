@@ -1,4 +1,5 @@
 package dev.petiscaria.comandas.enuns.caixa;
 
-public class StatusCaixa {
+public enum StatusCaixa {
+    ABERTO, FECHADO
 }

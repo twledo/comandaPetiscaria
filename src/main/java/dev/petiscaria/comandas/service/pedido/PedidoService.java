@@ -1,6 +1,7 @@
 package dev.petiscaria.comandas.service.pedido;
 
 import dev.petiscaria.comandas.enuns.AcaoComanda;
+import dev.petiscaria.comandas.enuns.StatusItemPedido;
 import dev.petiscaria.comandas.enuns.StatusPedido;
 import dev.petiscaria.comandas.models.comanda.Comanda;
 import dev.petiscaria.comandas.models.comanda.ItemPedido;
@@ -40,14 +41,14 @@ public class PedidoService {
             throw new IllegalStateException("Não é possível entregar itens de um pedido cancelado.");
         }
 
-        item.setEntregue(true);
+        item.setStatus(StatusItemPedido.ENTREGUE);
         item.setUsuarioResponsavelEntrega(usuario);
-        itemPedidoRepository.saveAndFlush(item); // O Flush força a gravação imediata
+        itemPedidoRepository.saveAndFlush(item);
 
         Pedido pedido = item.getPedido();
 
-        // 2. 🚀 Lógica Blindada: Pergunta ao banco se ainda existe algum item FALSE
-        long itensRestantes = itemPedidoRepository.countByPedidoIdAndEntregueFalse(pedido.getId());
+        // 2. Lógica Blindada: Pergunta ao banco se ainda existe algum item FALSE
+        long itensRestantes = itemPedidoRepository.countByPedidoIdAndStatus(pedido.getId(), StatusItemPedido.PENDENTE);
 
         // 3. Se o contador for 0, o pedido todo está entregue
         if (itensRestantes == 0 && pedido.getStatus() == StatusPedido.PENDENTE) {

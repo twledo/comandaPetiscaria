@@ -77,6 +77,9 @@ public class SecurityConfig {
                     req.requestMatchers("/api/produtos/**")
                             .hasRole(TipoUsuario.ADMIN.name());
 
+                    req.requestMatchers("/api/caixa/**")
+                            .hasRole(TipoUsuario.ADMIN.name());
+
                     req.requestMatchers("/api/comandas/**")
                             .hasAnyRole(
                                     TipoUsuario.ADMIN.name(),

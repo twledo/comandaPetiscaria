@@ -2,6 +2,7 @@ package dev.petiscaria.comandas.models.comanda;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.petiscaria.comandas.enuns.StatusItemPedido;
 import dev.petiscaria.comandas.models.pedido.Pedido;
 import dev.petiscaria.comandas.models.produto.Produto;
 import jakarta.persistence.*;
@@ -32,11 +33,9 @@ public class ItemPedido {
     @JoinColumn(name = "produto_id")
     private Produto produto;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private boolean entregue = false;
-
-    @Column(nullable = false)
-    private String status = "ATIVO";
+    private StatusItemPedido status = StatusItemPedido.PENDENTE;
 
     private String motivoCancelamento;
 
@@ -47,13 +46,13 @@ public class ItemPedido {
     private Long quantidade;
     private BigDecimal precoUnitario; // Snapshot: Preço no momento da compra
 
-    @Column(length = 60)
+    @Column(length = 40)
     private String observacao;
     private boolean meiaPorcao = false;
 
     @JsonProperty("totalItem") // Aparecerá no seu JSON do Frontend
     public BigDecimal getTotalItem() {
-        if ("CANCELADO".equals(this.status)) {
+        if (StatusItemPedido.CANCELADO.equals(this.status)) {
             return BigDecimal.ZERO;
         }
 

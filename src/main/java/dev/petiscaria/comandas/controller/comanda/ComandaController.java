@@ -3,6 +3,7 @@ package dev.petiscaria.comandas.controller.comanda;
 import dev.petiscaria.comandas.dto.itens.LancamentoLoteDTO;
 import dev.petiscaria.comandas.dto.pagamento.PagamentoItensDTO;
 import dev.petiscaria.comandas.dto.pagamento.PagamentoParcialDTO;
+import dev.petiscaria.comandas.enuns.MetodoPagamento;
 import dev.petiscaria.comandas.models.comanda.Comanda;
 import dev.petiscaria.comandas.service.comanda.ComandaService;
 import lombok.RequiredArgsConstructor;
@@ -117,6 +118,7 @@ public class ComandaController {
      * }
      */
     @PostMapping("/{id}/dividir-conta")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Comanda> dividirConta(
             @PathVariable Long id,
             @Validated @RequestBody PagamentoParcialDTO dto) {
@@ -128,8 +130,10 @@ public class ComandaController {
 
     @PostMapping("/{id}/recebimento")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> finalizarAtendimento(@PathVariable Long id) {
-        comandaService.finalizarAtendimento(id, getUsuarioLogado());
+    public ResponseEntity<Void> finalizarAtendimento(
+            @PathVariable Long id,
+            @RequestParam MetodoPagamento metodoPagamento) {
+        comandaService.finalizarAtendimento(id, getUsuarioLogado(), metodoPagamento);
         return ResponseEntity.ok().build();
     }
 }

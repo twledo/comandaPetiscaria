@@ -25,6 +25,7 @@ public class PedidoController {
     // Este método agora é o protagonista da entrega
     @PatchMapping("/item/{itemId}/entregar")
     public ResponseEntity<Void> entregarItem(@PathVariable Long itemId) {
+        System.out.println("DEBUG: ID recebido no Controller: " + itemId);
         pedidoService.entregarItem(itemId, getUsuarioLogado());
         return ResponseEntity.noContent().build();
     }

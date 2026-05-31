@@ -16,23 +16,21 @@ import dev.petiscaria.comandas.repository.comanda.ComandaRepository;
 import dev.petiscaria.comandas.repository.mesa.MesaRepository;
 import dev.petiscaria.comandas.repository.produto.ProdutoRepository;
 import dev.petiscaria.comandas.service.audit.AuditoriaService;
+import dev.petiscaria.comandas.service.caixa.CaixaService;
 import dev.petiscaria.comandas.service.mesa.MesaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -50,10 +48,16 @@ public class ComandaService {
     private final ComandaRecebimentoRepository recebimentoRepository;
     private final AuditoriaService auditoriaService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final CaixaService caixaService;
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
     public Comanda iniciarAtendimento(Long mesaId, String usuario, String nomeCliente) {
+
+        if (!caixaService.possuiCaixaAberto()) {
+            throw new IllegalStateException("O caixa encontra-se fechado. Abra o caixa antes de iniciar um atendimento.");
+        }
+
         boolean possuiAberta = comandaRepository.existsByMesaIdAndStatus(mesaId, StatusComanda.ABERTA);
         if (possuiAberta) throw new RuntimeException("Já existe um atendimento ativo para esta mesa!");
         if (nomeCliente == null || nomeCliente.trim().isEmpty())
@@ -101,33 +105,18 @@ public class ComandaService {
             String obs = (itemDto.observacao() == null) ? "" : itemDto.observacao().trim();
             boolean ehMeia = (itemDto.meiaPorcao() != null && itemDto.meiaPorcao());
 
-            // REGRA: Se houver observação, NUNCA agrupa.
-            // Se não houver, tenta agrupar apenas com outros sem observação.
-            boolean temObs = !obs.isEmpty();
-
-            ItemPedido itemExistente = null;
-            if (!temObs) { // Só tentamos agrupar itens comuns, sem observações
-                itemExistente = novoPedido.getItens().stream()
-                        .filter(i -> i.getProduto().getId().equals(produto.getId()))
-                        .filter(i -> i.isMeiaPorcao() == ehMeia)
-                        .filter(i -> (i.getObservacao() == null || i.getObservacao().trim().isEmpty()))
-                        .findFirst()
-                        .orElse(null);
-            }
-
-            if (itemExistente != null) {
-                itemExistente.setQuantidade(itemExistente.getQuantidade() + itemDto.quantidade());
-            } else {
-                // Aqui criamos um novo registro sempre que houver observação
+            for (int i = 0; i < itemDto.quantidade(); i++) {
                 ItemPedido novoItem = new ItemPedido();
                 novoItem.setPedido(novoPedido);
                 novoItem.setProduto(produto);
                 novoItem.setNomeProduto(produto.getNome());
                 novoItem.setPrecoUnitario(produto.getPreco().setScale(2, RoundingMode.HALF_UP));
-                novoItem.setQuantidade(itemDto.quantidade().longValue());
+                novoItem.setQuantidade(1L);
                 novoItem.setMeiaPorcao(ehMeia);
                 novoItem.setObservacao(itemDto.observacao());
                 novoItem.setUsuarioLancamentoItem(usuario);
+                novoItem.setStatus(StatusItemPedido.PENDENTE);
+
                 novoPedido.getItens().add(novoItem);
             }
         }
@@ -138,7 +127,10 @@ public class ComandaService {
 
         Comanda comandaSalva = comandaRepository.saveAndFlush(comanda);
 
-        Pedido pedidoSalvo = comandaSalva.getPedidos().get(comandaSalva.getPedidos().size() - 1);
+        Pedido pedidoSalvo = comandaSalva.getPedidos().stream()
+                .max(Comparator.comparing(Pedido::getId))
+                .orElseThrow(() -> new RuntimeException("Pedido recém-salvo não encontrado."));
+
         String numeroPedido = "PED-" + pedidoSalvo.getId();
 
         for (ItemPedido item : pedidoSalvo.getItens()) {
@@ -146,7 +138,6 @@ public class ComandaService {
             auditoriaService.registrarAcaoItem(comandaSalva, AcaoComanda.ITEM_ADICIONADO, detalheLog, usuario, numeroPedido, item.getProduto().getId(), item.getNomeProduto(), Math.toIntExact(item.getQuantidade()), item.getTotalItem());
         }
 
-        // Impressão dos tickets (mantida a lógica de agrupamento por setor)
         Map<SetorPreparacao, List<ItemPedido>> itensPorSetor = pedidoSalvo.getItens().stream()
                 .collect(Collectors.groupingBy(item -> item.getProduto().getCategoria().getSetor()));
 
@@ -186,7 +177,6 @@ public class ComandaService {
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'GARCOM')")
     public Comanda estornarItem(Long comandaId, Long itemId, String motivo, String usuario) {
-        // 1. Validação de segurança
         if (motivo == null || motivo.trim().length() < 10) {
             throw new RuntimeException("O motivo do cancelamento deve conter no mínimo 10 caracteres.");
         }
@@ -194,59 +184,36 @@ public class ComandaService {
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         garantirMesaOcupada(comanda.getMesa());
 
-        ItemPedido itemParaEstornar = comanda.getPedidos().stream()
+        ItemPedido itemOriginal = comanda.getPedidos().stream()
                 .flatMap(pedido -> pedido.getItens().stream())
                 .filter(item -> item.getId().equals(itemId))
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("Item não encontrado nesta comanda."));
+                .orElseThrow(() -> new RuntimeException("Item não encontrado."));
 
-        if ("CANCELADO".equals(itemParaEstornar.getStatus())) {
+        if (StatusItemPedido.CANCELADO.equals(itemOriginal.getStatus())) {
             throw new RuntimeException("Este item já encontra-se cancelado.");
         }
 
-        // 🌟 PERSISTÊNCIA: Gravando o motivo e o usuário na entidade
-        itemParaEstornar.setMotivoCancelamento(motivo.trim());
-        itemParaEstornar.setUsuarioResponsavelEstorno(usuario);
+        itemOriginal.setStatus(StatusItemPedido.CANCELADO);
+        itemOriginal.setMotivoCancelamento(motivo.trim());
+        itemOriginal.setUsuarioResponsavelEstorno(usuario);
 
-        Pedido pedidoPai = itemParaEstornar.getPedido();
-        BigDecimal valorUnitarioEstornado = itemParaEstornar.getPrecoEfetivo();
-        String detalheLog;
+        Pedido pedidoPai = itemOriginal.getPedido();
+        boolean todosCancelados = pedidoPai.getItens().stream()
+                .allMatch(i -> StatusItemPedido.CANCELADO.equals(i.getStatus()));
 
-        if (itemParaEstornar.getQuantidade() > 1) {
-            itemParaEstornar.setQuantidade(itemParaEstornar.getQuantidade() - 1);
-            detalheLog = String.format("Estorno parcial: Removida 1 un. de '%s'. Restam %d un.",
-                    itemParaEstornar.getNomeProduto(), itemParaEstornar.getQuantidade());
-        } else {
-            itemParaEstornar.setStatus("CANCELADO");
-            detalheLog = String.format("Estorno total: Marcada a última unidade de '%s' como cancelada.",
-                    itemParaEstornar.getNomeProduto());
-
-            boolean todosCancelados = pedidoPai.getItens().stream()
-                    .allMatch(i -> "CANCELADO".equals(i.getStatus()));
-
-            if (todosCancelados) {
-                pedidoPai.setStatus(StatusPedido.CANCELADO);
-                detalheLog += " Todos os itens do pedido foram cancelados.";
-            }
+        if (todosCancelados) {
+            pedidoPai.setStatus(StatusPedido.CANCELADO);
         }
 
         atualizarSaldoTotal(comanda);
 
-        // Auditoria (mantendo o log detalhado)
-        auditoriaService.registrarAcaoItem(comanda, AcaoComanda.ITEM_REMOVIDO, detalheLog, usuario,
-                "PED-" + pedidoPai.getId(), itemParaEstornar.getProduto().getId(),
-                itemParaEstornar.getNomeProduto(), 1, valorUnitarioEstornado);
-
-        // Impressão do ticket
-        String ticket = "=================================\n" +
-                "    !!! CANCELAMENTO !!!\n" +
-                "   USUÁRIO: " + usuario + "\n" +
-                "   MOTIVO: " + motivo.trim().toUpperCase() + "\n" +
-                "=================================\n";
-        System.out.println(ticket);
+        auditoriaService.registrarAcaoItem(comanda, AcaoComanda.ITEM_REMOVIDO,
+                "Cancelado: " + itemOriginal.getNomeProduto(), usuario,
+                "PED-" + pedidoPai.getId(), itemOriginal.getProduto().getId(),
+                itemOriginal.getNomeProduto(), 1, itemOriginal.getPrecoEfetivo());
 
         notificarMudancaMesas();
-
         return comandaRepository.save(comanda);
     }
 
@@ -278,7 +245,8 @@ public class ComandaService {
             throw new IllegalStateException("A mesa precisa estar ocupada.");
 
         boolean temPendente = comanda.getPedidos().stream()
-                .anyMatch(p -> p.getStatus() == StatusPedido.PENDENTE);
+                .flatMap(p -> p.getItens().stream())
+                .anyMatch(item -> item.getStatus() == StatusItemPedido.PENDENTE);
 
         if (temPendente) {
             throw new IllegalStateException("Não é possível fechar a conta. Existem pedidos pendentes de entrega.");
@@ -321,7 +289,6 @@ public class ComandaService {
             BigDecimal precoUnitarioEfetivo = itemBanco.getPrecoEfetivo();
             BigDecimal valorCalculadoParaEsteItem = precoUnitarioEfetivo.multiply(new BigDecimal(qtdSolicitada));
 
-            // Salva um recebimento atômico para este item usando o método selecionado
             ComandaRecebimento recebimento = ComandaRecebimento.builder()
                     .comanda(comanda)
                     .valor(valorCalculadoParaEsteItem.setScale(2, RoundingMode.HALF_UP))
@@ -343,7 +310,6 @@ public class ComandaService {
 
         atualizarSaldoTotal(comanda);
 
-        // O método do primeiro item é registrado na auditoria global para histórico resumido
         MetodoPagamento metodoAuditoria = itensSelecionados.get(0).metodoPagamento();
         auditoriaService.registrarAcaoPagamento(comanda, AcaoComanda.PAGAMENTO_PARCIAL, "Recebido pagamento parcial de itens.", usuario, totalPagoAgora, metodoAuditoria);
 
@@ -407,7 +373,12 @@ public class ComandaService {
 
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
-    public void finalizarAtendimento(Long comandaId, String usuarioCaixa) {
+    public void finalizarAtendimento(Long comandaId, String usuarioCaixa, MetodoPagamento metodoPagamento) {
+        // CORREÇÃO: método de pagamento agora é parâmetro obrigatório
+        if (metodoPagamento == null) {
+            throw new IllegalArgumentException("O método de pagamento é obrigatório para finalizar o atendimento.");
+        }
+
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         Mesa mesa = comanda.getMesa();
         if (mesa.getStatus() != StatusMesa.AGUARDANDO_PAGAMENTO)
@@ -416,6 +387,8 @@ public class ComandaService {
         ComandaRecebimento recebimento = ComandaRecebimento.builder()
                 .comanda(comanda)
                 .valor(comanda.getTotal())
+                .metodoPagamento(metodoPagamento) // CORREÇÃO: método setado corretamente
+                .dataRecebimento(LocalDateTime.now())
                 .usuario(usuarioCaixa)
                 .observacao("Pgto Integral")
                 .build();
@@ -456,8 +429,16 @@ public class ComandaService {
     }
 
     private void verificarEFinalizarSeZerada(Comanda comanda, String usuario) {
-        boolean comandaVazia = comanda.getPedidos().stream().allMatch(p -> p.getItens().isEmpty());
-        if (comandaVazia) {
+        List<ItemPedido> todosOsItens = comanda.getPedidos().stream()
+                .flatMap(p -> p.getItens().stream())
+                .toList();
+
+        boolean todosCancelados = todosOsItens.stream()
+                .allMatch(i -> StatusItemPedido.CANCELADO.equals(i.getStatus()));
+
+        boolean listaRealmenteVazia = todosOsItens.isEmpty();
+
+        if (todosCancelados || listaRealmenteVazia) {
             finalizarProcesso(comanda, usuario);
         }
     }

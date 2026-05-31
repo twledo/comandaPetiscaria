@@ -1,4 +1,5 @@
 package dev.petiscaria.comandas.enuns.caixa;
 
-public class TipoMovimentacaoCaixa {
+public enum TipoMovimentacaoCaixa {
+    SUPRIMENTO, SANGRIA
 }
