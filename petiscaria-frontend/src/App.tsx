@@ -22,10 +22,8 @@ export default function App() {
 
   return (
       <AppLayout activePage={safePage} onNavigate={setPage}>
-        {safePage === 'mesas' && <MesasPage />}
+        {safePage === 'mesas' && <MesasPage onNavigate={setPage} />}
         {safePage === 'gestao' && isAdmin && <GestaoPage />}
-
-        {/* 🌟 4. Renderize a tela do caixa quando estiver ativa */}
         {safePage === 'caixa' && isAdmin && <TelaCaixa />}
       </AppLayout>
   );

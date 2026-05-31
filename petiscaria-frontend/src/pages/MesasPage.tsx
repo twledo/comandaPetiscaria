@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { createPortal } from "react-dom"; // 👈 PORTAL AQUI
-import { mesasApi, dominiosApi } from '../api';
+import { createPortal } from "react-dom";
+import { mesasApi, dominiosApi, caixaApi } from '../api';
 import type { Opcao } from '../api';
 import type { Mesa, StatusMesa } from '../types';
 import MesaCard from '../components/mesas/MesaCard';
@@ -8,9 +8,41 @@ import MesaModal from '../components/mesas/MesaModal';
 import styles from './MesasPage.module.css';
 import { useMesasWebSocket } from "../hook/useMesasWebSocket";
 
-const IconSearch = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
+const IconSearch = () => (
+    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+);
 
-export default function MesasPage() {
+/* ──────────────────────────────────────────────
+   MODAL: CAIXA FECHADO
+────────────────────────────────────────────── */
+function ModalCaixaFechado({ onNavigate }: { onNavigate: () => void }) {
+    return (
+        <div className={styles.caixaOverlay}>
+            <div className={styles.caixaModal}>
+                <div className={styles.caixaIcone}>🔒</div>
+                <h2 className={styles.caixaTitulo}>Caixa Fechado</h2>
+                <p className={styles.caixaDescricao}>
+                    Nenhum turno ativo encontrado. Abra o caixa antes de acessar o mapa de mesas.
+                </p>
+                <button
+                    className={styles.caixaBtnPrimary}
+                    onClick={onNavigate}
+                >
+                    Ir para o Caixa →
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────
+   PÁGINA PRINCIPAL
+────────────────────────────────────────────── */
+type Page = 'mesas' | 'gestao' | 'caixa';
+
+export default function MesasPage({ onNavigate }: { onNavigate?: (page: Page) => void }) {
     const [mesas, setMesas] = useState<Mesa[]>([]);
     const [statusOpcoes, setStatusOpcoes] = useState<Opcao[]>([]);
     const [busca, setBusca] = useState('');
@@ -18,7 +50,10 @@ export default function MesasPage() {
     const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // Controle Responsivo e do Portal
+    // null = verificando, true = aberto, false = fechado
+    const [caixaAberto, setCaixaAberto] = useState<boolean | null>(null);
+
+    // Controle responsivo e Portal
     const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
     const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
@@ -38,11 +73,16 @@ export default function MesasPage() {
         dominiosApi.buscarTodos()
             .then(res => setStatusOpcoes(res.statusMesa))
             .catch(console.error);
+
         load();
+
+        // Verifica se há caixa ativo
+        caixaApi.buscarAtivo()
+            .then(ativo => setCaixaAberto(!!ativo))
+            .catch(() => setCaixaAberto(false));
     }, [load]);
 
     useEffect(() => {
-        // Pega o elemento do AppLayout assim que a página carregar
         setPortalTarget(document.getElementById('topbar-actions'));
 
         const handleResize = () => setIsDesktop(window.innerWidth > 768);
@@ -93,20 +133,18 @@ export default function MesasPage() {
         return { filtered: filteredList, counts: countsObj };
     }, [mesas, filtro, busca, statusOpcoes]);
 
-    const getStatusLabel = (status: string) => {
-        return statusOpcoes.find(s => s.value === status)?.label || status;
-    };
+    const getStatusLabel = (status: string) =>
+        statusOpcoes.find(s => s.value === status)?.label || status;
 
     const getShortLabel = (value: string) => {
         switch (value) {
-            case 'DISPONIVEL': return 'Disp.';
-            case 'OCUPADA': return 'Ocup.';
-            case 'AGUARDANDO_PAGAMENTO': return 'A. Pgto.';
-            default: return value.substring(0, 6) + '.';
+            case 'DISPONIVEL':          return 'Disp.';
+            case 'OCUPADA':             return 'Ocup.';
+            case 'AGUARDANDO_PAGAMENTO':return 'A. Pgto.';
+            default:                    return value.substring(0, 6) + '.';
         }
     };
 
-    // 👇 ISOLAMOS A BARRA DE BUSCA NUMA CONSTANTE
     const searchBarElement = (
         <div className={styles.actionsGroup}>
             <div className={styles.searchWrapper}>
@@ -125,14 +163,13 @@ export default function MesasPage() {
     return (
         <div className={styles.page}>
 
-            {/* 👇 TELETRANSPORTE (PORTAL) 👇 */}
-            {/* Se for PC e achar o cabeçalho global, joga pra lá. Se for celular, renderiza aqui normal. */}
+            {/* ── 1. BARRA DE BUSCA (Portal no desktop, inline no mobile) ── */}
             {isDesktop && portalTarget
                 ? createPortal(searchBarElement, portalTarget)
                 : searchBarElement
             }
 
-            {/* ── 2. CARDS DE MÉTRICAS ── */}
+            {/* ── 2. CARDS DE MÉTRICAS / FILTROS ── */}
             <section className={styles.metricFiltersContainer}>
                 <button
                     type="button"
@@ -145,7 +182,6 @@ export default function MesasPage() {
 
                 {statusOpcoes.map(f => {
                     const colorClass = styles[`active${f.value}`] || styles.activeDefault;
-
                     return (
                         <button
                             key={f.value}
@@ -178,20 +214,25 @@ export default function MesasPage() {
                                 key={mesa.id}
                                 mesa={mesa}
                                 statusLabel={getStatusLabel(mesa.status)}
-                                onClick={() => setSelectedMesa(mesa)}
+                                onClick={caixaAberto ? () => setSelectedMesa(mesa) : undefined}
                             />
                         ))}
                     </div>
                 )}
             </main>
 
-            {selectedMesa && (
+            {/* ── 4. MODAL DE MESA SELECIONADA ── */}
+            {caixaAberto && selectedMesa && (
                 <MesaModal
                     mesa={selectedMesa}
                     statusLabel={getStatusLabel(selectedMesa.status)}
                     onClose={() => setSelectedMesa(null)}
                     onRefresh={async () => { await load(); }}
                 />
+            )}
+
+            {caixaAberto === false && (
+                <ModalCaixaFechado onNavigate={() => onNavigate?.('caixa')} />
             )}
         </div>
     );

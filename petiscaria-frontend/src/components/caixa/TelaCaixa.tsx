@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { caixaApi } from '../../api';
+import React, {useState, useEffect} from 'react';
+import {caixaApi} from '../../api';
 import styles from './TelaCaixa.module.css';
 
 export default function TelaCaixa() {
@@ -8,6 +8,7 @@ export default function TelaCaixa() {
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState<'ABRIR' | 'FECHAR' | 'SUPRIMENTO' | 'SANGRIA' | 'RELATORIO' | null>(null);
     const [selectedSessaoId, setSelectedSessaoId] = useState<number | null>(null);
+    const [saldoEsperado, setSaldoEsperado] = useState<number>(0);
 
     useEffect(() => {
         carregarDados();
@@ -30,7 +31,7 @@ export default function TelaCaixa() {
     }
 
     const formatarMoeda = (valor: number) => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
+        return new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(valor || 0);
     };
 
     const formatarData = (d: string | null) => {
@@ -42,14 +43,13 @@ export default function TelaCaixa() {
     if (loading) {
         return (
             <div className={styles.loadingContainer}>
-                <span className={styles.spinner} /> Carregando sistema de caixa...
+                <span className={styles.spinner}/> Carregando sistema de caixa...
             </div>
         );
     }
 
     return (
         <div className={styles.container}>
-            {/* 🔴 ESTADO: CAIXA FECHADO */}
             {!sessao ? (
                 <div className={styles.containerFechado}>
                     <div className={styles.cardFechado}>
@@ -62,17 +62,29 @@ export default function TelaCaixa() {
                     </div>
                 </div>
             ) : (
-                /* 🟢 ESTADO: CAIXA ABERTO */
                 <>
                     <header className={styles.header}>
                         <div>
                             <h1 className={styles.title}>Caixa Ativo</h1>
                             <p className={styles.subtitle}>
-                                Aberto por <b>{sessao.usuarioAbertura}</b> em <b>{new Date(sessao.dataAbertura).toLocaleString('pt-BR')}</b>
+                                Aberto
+                                por <b>{sessao.usuarioAbertura}</b> em <b>{new Date(sessao.dataAbertura).toLocaleString('pt-BR')}</b>
                             </p>
                         </div>
                         <div>
-                            <button className={styles.btnDanger} onClick={() => setModal('FECHAR')}>
+                            <button
+                                className={styles.btnDanger}
+                                onClick={async () => {
+                                    try {
+                                        // Busca o relatório parcial do turno ativo para obter o saldo esperado
+                                        const rel = await caixaApi.gerarRelatorio(sessao.id);
+                                        setSaldoEsperado(Number(rel.saldoEsperadoDinheiro) || 0);
+                                    } catch {
+                                        setSaldoEsperado(0);
+                                    }
+                                    setModal('FECHAR');
+                                }}
+                            >
                                 Encerrar Turno
                             </button>
                         </div>
@@ -96,7 +108,6 @@ export default function TelaCaixa() {
                 </>
             )}
 
-            {/* 📜 HISTÓRICO DE TURNOS */}
             <section className={styles.sectionMovimentacoes}>
                 <h3 className={styles.sectionTitle}>Histórico de Fechamentos</h3>
 
@@ -106,19 +117,24 @@ export default function TelaCaixa() {
                     <div className={styles.historicoGrid}>
                         {historico.map(h => (
                             <div key={h.id} className={styles.cardTurno}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                                     <h4>Turno #{h.id}</h4>
-                                    <span className={`${styles.badge} ${h.status === 'ABERTO' ? styles.badgeGreen : styles.badgeRed}`}>
+                                    <span
+                                        className={`${styles.statusBadge} ${h.status === 'ABERTO' ? styles.badgeGreen : styles.badgeRed}`}>
                                         {h.status}
                                     </span>
                                 </div>
-                                <small style={{ color: '#718096', marginBottom: '0.5rem', display: 'block' }}>
+                                <small style={{color: 'var(--text-2)', marginBottom: '0.5rem', display: 'block'}}>
+                                    Abertura: {formatarData(h.dataAbertura)}<br/>
                                     Fechamento: {formatarData(h.dataFechamento)}
                                 </small>
-                                <p style={{ margin: '0 0 1rem 0' }}>
+                                <p style={{margin: '0 0 1rem 0'}}>
                                     Saldo Final: <b>{formatarMoeda(h.saldoDinheiroFechamento)}</b>
                                 </p>
-                                <button className={styles.btnGhost} onClick={() => { setSelectedSessaoId(h.id); setModal('RELATORIO'); }}>
+                                <button className={styles.btnGhost} onClick={() => {
+                                    setSelectedSessaoId(h.id);
+                                    setModal('RELATORIO');
+                                }}>
                                     Ver Relatório
                                 </button>
                             </div>
@@ -127,130 +143,192 @@ export default function TelaCaixa() {
                 )}
             </section>
 
-            {/* FLUXO DE MODAIS */}
-            {modal === 'ABRIR' && <ModalContagem tipo="ABRIR" onClose={() => setModal(null)} onSuccess={carregarDados} />}
-            {modal === 'FECHAR' && <ModalContagem tipo="FECHAR" onClose={() => setModal(null)} onSuccess={carregarDados} />}
-            {modal === 'SUPRIMENTO' && <ModalMovimentacao tipo="SUPRIMENTO" onClose={() => setModal(null)} onSuccess={carregarDados} />}
-            {modal === 'SANGRIA' && <ModalMovimentacao tipo="SANGRIA" onClose={() => setModal(null)} onSuccess={carregarDados} />}
-            {modal === 'RELATORIO' && selectedSessaoId && <ModalRelatorio sessaoId={selectedSessaoId} onClose={() => setModal(null)} />}
+            {modal === 'ABRIR' &&
+                <ModalContagem tipo="ABRIR" onClose={() => setModal(null)} onSuccess={carregarDados}/>}
+            {modal === 'FECHAR' &&
+                <ModalContagem
+                    tipo="FECHAR"
+                    onClose={() => setModal(null)}
+                    onSuccess={carregarDados}
+                    saldoEsperado={saldoEsperado}
+                />
+            }
+            {modal === 'SUPRIMENTO' &&
+                <ModalMovimentacao tipo="SUPRIMENTO" onClose={() => setModal(null)} onSuccess={carregarDados}/>}
+            {modal === 'SANGRIA' &&
+                <ModalMovimentacao tipo="SANGRIA" onClose={() => setModal(null)} onSuccess={carregarDados}/>}
+            {modal === 'RELATORIO' && selectedSessaoId &&
+                <ModalRelatorio sessaoId={selectedSessaoId} onClose={() => setModal(null)}/>}
         </div>
     );
 }
 
-// ============================================================================
-// MODAL INTERNO: CONTAGEM DE CÉDULAS E MOEDAS
-// ============================================================================
-function ModalContagem({ tipo, onClose, onSuccess }: { tipo: 'ABRIR' | 'FECHAR', onClose: () => void, onSuccess: () => void }) {
+// ✅ SUBSTITUIR pela versão correta:
+function ModalContagem({ tipo, onClose, onSuccess, saldoEsperado = 0 }: {
+    tipo: 'ABRIR' | 'FECHAR',
+    onClose: () => void,
+    onSuccess: () => void,
+    saldoEsperado?: number
+}) {
     const [contagem, setContagem] = useState<Record<string, string>>({});
-    const [observacoes, setObservacoes] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [observacao, setObservacao] = useState('');
+    const [etapa, setEtapa] = useState<'CONTAGEM' | 'JUSTIFICATIVA'>('CONTAGEM'); // ← estava faltando
 
-    const mapNotas = ['200', '100', '50', '20', '10', '5', '2'];
-    const mapMoedas = ['1', '0.50', '0.25', '0.10', '0.05'];
+    const notas = ['200', '100', '50', '20', '10', '5', '2'];
+    const moedas = ['1', '0.50', '0.25', '0.10', '0.05'];
 
-    const totalFisico = mapNotas.concat(mapMoedas).reduce((acc, valor) => {
-        const qtd = parseInt(contagem[valor]) || 0;
-        return acc + (parseFloat(valor) * qtd);
-    }, 0);
+    const total = parseFloat(
+        notas.concat(moedas).reduce((acc, v) =>
+            acc + (parseFloat(v) * (parseInt(contagem[v] || '0'))), 0
+        ).toFixed(2)
+    );
 
-    const handleChange = (valor: string, qtd: string) => {
-        setContagem(prev => ({ ...prev, [valor]: qtd.replace(/\D/g, '') }));
-    };
-
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        setLoading(true);
-
+    async function enviarFechamento(obs: string = '') { // ← estava faltando
         const payload = {
             qtd200: parseInt(contagem['200']) || 0,
             qtd100: parseInt(contagem['100']) || 0,
-            qtd50: parseInt(contagem['50']) || 0,
-            qtd20: parseInt(contagem['20']) || 0,
-            qtd10: parseInt(contagem['10']) || 0,
-            qtd5: parseInt(contagem['5']) || 0,
-            qtd2: parseInt(contagem['2']) || 0,
-            qtd1: parseInt(contagem['1']) || 0,
+            qtd50:  parseInt(contagem['50'])  || 0,
+            qtd20:  parseInt(contagem['20'])  || 0,
+            qtd10:  parseInt(contagem['10'])  || 0,
+            qtd5:   parseInt(contagem['5'])   || 0,
+            qtd2:   parseInt(contagem['2'])   || 0,
+            qtd1:   parseInt(contagem['1'])   || 0,
             qtd050: parseInt(contagem['0.50']) || 0,
             qtd025: parseInt(contagem['0.25']) || 0,
             qtd010: parseInt(contagem['0.10']) || 0,
             qtd005: parseInt(contagem['0.05']) || 0,
-            observacoes: observacoes.trim()
+            observacoes: obs
         };
-
         try {
-            if (tipo === 'ABRIR') {
-                await caixaApi.abrir(payload);
-            } else {
-                await caixaApi.fechar(payload);
-            }
+            if (tipo === 'ABRIR') await caixaApi.abrir(payload);
+            else await caixaApi.fechar(payload);
             onSuccess();
             onClose();
-        } catch (error: any) {
-            alert(error.message || 'Erro ao processar requisição financeira.');
-        } finally {
-            setLoading(false);
+        } catch (e) {
+            alert("Erro ao salvar contagem do caixa.");
+        }
+    }
+
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (tipo === 'FECHAR' && total !== parseFloat(saldoEsperado.toFixed(2))) {
+            setEtapa('JUSTIFICATIVA');
+        } else {
+            enviarFechamento();
         }
     }
 
     return (
         <div className={styles.backdrop}>
-            <form className={styles.modal} onSubmit={handleSubmit} style={{ maxWidth: '650px' }}>
-                <h3 style={{ color: tipo === 'FECHAR' ? '#e53e3e' : '#1a202c' }}>
-                    {tipo === 'ABRIR' ? 'Abrir Caixa (Fundo de Troco)' : 'Encerrar Turno (Conferência de Gaveta)'}
-                </h3>
+            <form className={styles.modal} onSubmit={handleSubmit} style={{maxWidth: '650px'}}>
+                <h3>{etapa === 'CONTAGEM' ? 'Conferência de Fechamento' : 'Divergência Detectada'}</h3>
 
-                <div className={styles.calculadoraGrid}>
-                    <div>
-                        <h4 className={styles.calculadoraTitle}>Cédulas</h4>
-                        <div className={styles.moedasContainer}>
-                            {mapNotas.map(n => (
-                                <div key={n} className={styles.notaRow}>
-                                    <label>R$ {n},00</label>
-                                    <input className={styles.inputNota} type="text" pattern="\d*" value={contagem[n] || ''} onChange={e => handleChange(n, e.target.value)} placeholder="0" />
-                                </div>
-                            ))}
+                {etapa === 'JUSTIFICATIVA' ? (
+                    <div style={{padding: '20px', border: '1px solid var(--red)', borderRadius: '8px'}}>
+                        <p style={{color: 'var(--red)', marginBottom: '0.5rem'}}>
+                            Divergência detectada!
+                        </p>
+                        <div style={{display: 'flex', gap: '1rem', marginBottom: '1rem'}}>
+                            <div>
+                                <small style={{color: 'var(--text-2)'}}>Esperado pelo sistema</small>
+                                <p style={{fontWeight: 'bold'}}>
+                                    R$ {saldoEsperado.toFixed(2).replace('.', ',')}
+                                </p>
+                            </div>
+                            <div>
+                                <small style={{color: 'var(--text-2)'}}>Valor contado</small>
+                                <p style={{fontWeight: 'bold'}}>
+                                    R$ {total.toFixed(2).replace('.', ',')}
+                                </p>
+                            </div>
+                            <div>
+                                <small style={{color: 'var(--text-2)'}}>Diferença</small>
+                                <p style={{
+                                    fontWeight: 'bold',
+                                    color: (total - saldoEsperado) >= 0 ? 'var(--success)' : 'var(--red)'
+                                }}>
+                                    R$ {(total - saldoEsperado).toFixed(2).replace('.', ',')}
+                                </p>
+                            </div>
+                        </div>
+                        <label style={{display: 'block', marginBottom: '0.5rem', fontWeight: 'bold'}}>
+                            Motivo da divergência <span style={{color: 'var(--red)'}}>*</span>
+                        </label>
+                        <textarea
+                            value={observacao}
+                            onChange={(e) => setObservacao(e.target.value)}
+                            required
+                            minLength={5}
+                            placeholder="Descreva o motivo da divergência (obrigatório)..."
+                            style={{width: '100%', minHeight: '80px', display: 'block', margin: '0 0 1rem 0'}}
+                            className={styles.input}
+                        />
+                        <div className={styles.modalActions}>
+                            <button type="button" className={styles.btnGhost} onClick={() => setEtapa('CONTAGEM')}>
+                                ← Voltar e recontar
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.btnDanger}
+                                disabled={observacao.trim().length < 10}
+                                onClick={() => enviarFechamento(observacao)}
+                            >
+                                Confirmar mesmo assim
+                            </button>
                         </div>
                     </div>
-                    <div>
-                        <h4 className={styles.calculadoraTitle}>Moedas</h4>
-                        <div className={styles.moedasContainer}>
-                            {mapMoedas.map(m => (
-                                <div key={m} className={styles.notaRow}>
-                                    <label>R$ {parseFloat(m).toFixed(2).replace('.', ',')}</label>
-                                    <input className={styles.inputNota} type="text" pattern="\d*" value={contagem[m] || ''} onChange={e => handleChange(m, e.target.value)} placeholder="0" />
+                ) : (
+                    <>
+                        <div className={styles.calculadoraGrid}>
+                            <div>
+                                <h4 className={styles.calculadoraTitle}>Cédulas</h4>
+                                <div className={styles.moedasContainer}>
+                                    {notas.map(n => (
+                                        <div key={n} className={styles.notaRow}>
+                                            <label>R$ {n},00</label>
+                                            <input className={styles.inputNota} type="number" min="0" placeholder="0"
+                                                   value={contagem[n] || ''}
+                                                   onChange={e => setContagem({...contagem, [n]: e.target.value})}/>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
+                            </div>
+                            <div>
+                                <h4 className={styles.calculadoraTitle}>Moedas</h4>
+                                <div className={styles.moedasContainer}>
+                                    {moedas.map(m => (
+                                        <div key={m} className={styles.notaRow}>
+                                            <label>R$ {parseFloat(m).toFixed(2).replace('.', ',')}</label>
+                                            <input className={styles.inputNota} type="number" min="0" placeholder="0"
+                                                   value={contagem[m] || ''}
+                                                   onChange={e => setContagem({...contagem, [m]: e.target.value})}/>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
 
-                <div className={styles.totalCalculadoBox} style={{ marginTop: '1.5rem' }}>
-                    <span>Total Contabilizado:</span>
-                    <h2>R$ {totalFisico.toFixed(2).replace('.', ',')}</h2>
-                </div>
+                        <div className={styles.totalCalculadoBox}>
+                            <span>Total Contabilizado:</span>
+                            <h2>R$ {total.toFixed(2).replace('.', ',')}</h2>
+                        </div>
 
-                {tipo === 'FECHAR' && (
-                    <div style={{ marginTop: '1.5rem' }}>
-                        <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#4a5568' }}>Observações</label>
-                        <textarea className={styles.textarea} rows={2} value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Justifique eventuais diferenças de valores detectadas na gaveta física..." style={{ marginTop: '0.5rem' }} />
-                    </div>
+                        <div className={styles.modalActions}>
+                            <button type="button" className={styles.btnGhost} onClick={onClose}>Cancelar</button>
+                            <button type="submit" className={styles.btnPrimary}>Confirmar</button>
+                        </div>
+                    </>
                 )}
-
-                <div className={styles.modalActions}>
-                    <button type="button" className={styles.btnGhost} onClick={onClose}>Cancelar</button>
-                    <button type="submit" className={tipo === 'ABRIR' ? styles.btnPrimary : styles.btnDanger} disabled={loading}>
-                        {loading ? 'Processando...' : 'Confirmar'}
-                    </button>
-                </div>
             </form>
         </div>
     );
 }
 
-// ============================================================================
-// MODAL INTERNO: REGISTRO DE MOVIMENTAÇÕES EXTRAS (SUPRIMENTO / SANGRIA)
-// ============================================================================
-function ModalMovimentacao({ tipo, onClose, onSuccess }: { tipo: 'SUPRIMENTO' | 'SANGRIA', onClose: () => void, onSuccess: () => void }) {
+function ModalMovimentacao({tipo, onClose, onSuccess}: {
+    tipo: 'SUPRIMENTO' | 'SANGRIA',
+    onClose: () => void,
+    onSuccess: () => void
+}) {
     const [valor, setValor] = useState('');
     const [motivo, setMotivo] = useState('');
     const [loading, setLoading] = useState(false);
@@ -259,12 +337,11 @@ function ModalMovimentacao({ tipo, onClose, onSuccess }: { tipo: 'SUPRIMENTO' | 
         e.preventDefault();
         setLoading(true);
         try {
-            const valorNum = parseFloat(valor.replace(',', '.'));
-            await caixaApi.movimentar(tipo, valorNum, motivo);
+            await caixaApi.movimentar(tipo, parseFloat(valor.replace(',', '.')), motivo);
             onSuccess();
             onClose();
-        } catch (error: any) {
-            alert(error.message || 'Erro ao registrar movimentação');
+        } catch (error) {
+            alert('Erro ao registrar movimentação.');
         } finally {
             setLoading(false);
         }
@@ -273,22 +350,25 @@ function ModalMovimentacao({ tipo, onClose, onSuccess }: { tipo: 'SUPRIMENTO' | 
     return (
         <div className={styles.backdrop}>
             <form className={styles.modal} onSubmit={handleSalvar}>
-                <h3 style={{ color: tipo === 'SUPRIMENTO' ? '#38a169' : '#dd6b20' }}>
+                <h3 style={{color: tipo === 'SUPRIMENTO' ? 'var(--success)' : 'var(--warning)'}}>
                     {tipo === 'SUPRIMENTO' ? 'Nova Entrada (Suprimento)' : 'Nova Retirada (Sangria)'}
                 </h3>
                 <div className={styles.formGrid}>
                     <div>
                         <label>Valor (R$)</label>
-                        <input type="number" step="0.01" min="0.01" required autoFocus className={styles.input} value={valor} onChange={e => setValor(e.target.value)} placeholder="0.00" />
+                        <input type="number" step="0.01" min="0.01" required className={styles.input} value={valor}
+                               onChange={e => setValor(e.target.value)} placeholder="0.00"/>
                     </div>
                     <div>
                         <label>Motivo</label>
-                        <input type="text" required className={styles.input} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex: Fundo de troco reserva" />
+                        <input type="text" required className={styles.input} value={motivo}
+                               onChange={e => setMotivo(e.target.value)} placeholder="Justificativa..."/>
                     </div>
                     <div className={styles.modalActions}>
                         <button type="button" className={styles.btnGhost} onClick={onClose}>Cancelar</button>
-                        <button type="submit" className={tipo === 'SUPRIMENTO' ? styles.btnSuprimento : styles.btnSangria} disabled={loading || !valor || !motivo}>
-                            {loading ? 'Salvando...' : 'Confirmar'}
+                        <button type="submit"
+                                className={tipo === 'SUPRIMENTO' ? styles.btnSuprimento : styles.btnSangria}
+                                disabled={loading}>Confirmar
                         </button>
                     </div>
                 </div>
@@ -297,71 +377,119 @@ function ModalMovimentacao({ tipo, onClose, onSuccess }: { tipo: 'SUPRIMENTO' | 
     );
 }
 
-// ============================================================================
-// MODAL INTERNO: RELATÓRIO DE AUDITORIA COMPLETA
-// ============================================================================
-function ModalRelatorio({ sessaoId, onClose }: { sessaoId: number, onClose: () => void }) {
+function ModalRelatorio({
+                            sessaoId, onClose
+                        }: {
+    sessaoId: number, onClose
+        :
+        () => void
+}) {
     const [relatorio, setRelatorio] = useState<any>(null);
 
     useEffect(() => {
         caixaApi.gerarRelatorio(sessaoId).then(setRelatorio);
     }, [sessaoId]);
 
-    const formatarVal = (val: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
+    const formatarVal = (val: any) => new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(Number(val) || 0);
 
-    if (!relatorio) return <div className={styles.backdrop}><div className={styles.modal}>Carregando relatório...</div></div>;
+    if (!relatorio) return <div className={styles.backdrop}>
+        <div className={styles.modal}>Carregando relatório...</div>
+    </div>;
 
     const diferenca = Number(relatorio.diferencaCaixa) || 0;
-    const corDiferenca = diferenca > 0 ? '#38a169' : diferenca < 0 ? '#e53e3e' : '#1a202c';
+    const corDiferenca = diferenca > 0 ? 'var(--success)' : diferenca < 0 ? 'var(--red)' : 'var(--text)';
 
     return (
         <div className={styles.backdrop}>
-            <div className={styles.modal} style={{ maxWidth: '550px' }}>
-                <h3>Resumo Financeiro - Turno #{sessaoId}</h3>
+            <div className={styles.modal} style={{maxWidth: '500px'}}>
+                <h3 style={{color: 'var(--text)'}}>Relatório do Turno #{sessaoId}</h3>
 
-                <div className={styles.formGrid} style={{ gap: '0.75rem', marginTop: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.5rem' }}>
-                        <span>Vendas em Dinheiro:</span> <b>{formatarVal(relatorio.totalDinheiroVendas)}</b>
+                <div className={styles.relatorioBody}
+                     style={{display: 'flex', flexDirection: 'column', gap: '0.75rem', color: 'var(--text)'}}>
+                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span>Vendas em Dinheiro:</span>
+                        <b>{formatarVal(relatorio.totalDinheiroVendas)}</b></div>
+                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span>PIX Recebido:</span>
+                        <b>{formatarVal(relatorio.totalPix)}</b></div>
+                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span>Cartão Débito:</span>
+                        <b>{formatarVal(relatorio.totalDebito)}</b></div>
+                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span>Cartão Crédito:</span>
+                        <b>{formatarVal(relatorio.totalCredito)}</b></div>
+
+                    <hr style={{ width: '100%', border: '0.5px solid var(--border)' }} />
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                        <span>Total Geral:</span>
+                        <b>
+                            {formatarVal(
+                                relatorio.totalDinheiroVendas +
+                                relatorio.totalPix +
+                                relatorio.totalDebito +
+                                relatorio.totalCredito
+                            )}
+                        </b>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.5rem' }}>
-                        <span>PIX Recebido:</span> <b>{formatarVal(relatorio.totalPix)}</b>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.5rem' }}>
-                        <span>Cartão Débito:</span> <b>{formatarVal(relatorio.totalDebito)}</b>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.5rem' }}>
-                        <span>Cartão Crédito:</span> <b>{formatarVal(relatorio.totalCredito)}</b>
-                    </div>
 
-                    <div style={{ marginTop: '1rem', background: '#f7fafc', padding: '1rem', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                            <span>Fundo Inicial:</span> <span>{formatarVal(relatorio.saldoInicial)}</span>
+                    {/* 🐛 CORRIGIDO: Removido o background #f7fafc (branco) e substituido por var(--bg-2) (fundo secundário escuro) */}
+                    <div style={{
+                        marginTop: '1rem',
+                        background: 'var(--bg-2)',
+                        padding: '1rem',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)'
+                    }}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem'}}>
+                            <span>Fundo Inicial (Caixa):</span> <b>{formatarVal(relatorio.saldoInicial)}</b>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: '#38a169' }}>
-                            <span>(+) Suprimentos:</span> <span>{formatarVal(relatorio.totalSuprimentos)}</span>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginBottom: '0.5rem',
+                            color: 'var(--success)'
+                        }}>
+                            <span>(+) Suprimentos:</span> <b>{formatarVal(relatorio.totalSuprimentos)}</b>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: '#dd6b20' }}>
-                            <span>(-) Sangrias:</span> <span>{formatarVal(relatorio.totalSangrias)}</span>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginBottom: '0.5rem',
+                            color: 'var(--warning)'
+                        }}>
+                            <span>(-) Sangrias:</span> <b>{formatarVal(relatorio.totalSangrias)}</b>
                         </div>
 
-                        <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
+                        <hr style={{border: '0', borderTop: '1px solid var(--border)', margin: '10px 0'}}/>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: '#718096' }}>
-                            <span>Saldo Esperado (Sistema):</span> <span>{formatarVal(relatorio.saldoEsperadoDinheiro)}</span>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginBottom: '0.5rem',
+                            color: 'var(--text-2)'
+                        }}>
+                            <span>Saldo Esperado (Sistema):</span>
+                            <b>{formatarVal(relatorio.saldoEsperadoDinheiro)}</b>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                            <span>Saldo Físico (Gaveta Contada):</span> <b>{formatarVal(relatorio.saldoDinheiroContado)}</b>
+                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem'}}>
+                            <span>Fundo Final (Contado):</span> <b>{formatarVal(relatorio.saldoDinheiroContado)}</b>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0', fontSize: '1.2rem' }}>
-                            <strong style={{ color: corDiferenca }}>Diferença de Caixa:</strong>
-                            <strong style={{ color: corDiferenca }}>{formatarVal(diferenca)}</strong>
+                        <hr style={{border: '0', borderTop: '1px solid var(--border)', margin: '10px 0'}}/>
+
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            fontSize: '1.2rem',
+                            fontWeight: 'bold',
+                            color: corDiferenca
+                        }}>
+                            <span>Diferença de Caixa:</span> <span>{formatarVal(diferenca)}</span>
                         </div>
                     </div>
                 </div>
-
-                <div className={styles.modalActions} style={{ marginTop: '2rem' }}>
-                    <button className={styles.btnPrimary} onClick={onClose}>Fechar Auditoria</button>
+                <div style={{marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end'}}>
+                    <button className={styles.btnPrimary} onClick={onClose}>Fechar</button>
                 </div>
             </div>
         </div>

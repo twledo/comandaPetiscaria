@@ -14,14 +14,14 @@
 }
 
 /* ==========================================================================
-   BARRA DE BUSCA (Totalmente limpa, sem positions malucos)
+   BARRA DE BUSCA
    ========================================================================== */
 .actionsGroup {
   display: flex;
   align-items: center;
   gap: 1rem;
   width: 100%;
-  max-width: 320px; /* Largura perfeita pro header */
+  max-width: 320px;
 }
 
 .searchWrapper {
@@ -56,8 +56,12 @@
   box-shadow: 0 0 0 3px var(--primary-dim);
 }
 
+.searchInput::placeholder {
+  color: var(--text-3);
+}
+
 /* ==========================================================================
-   1. CARDS DE MÉTRICAS (Nome 90 graus + Número Centralizado)
+   CARDS DE MÉTRICAS / FILTROS
    ========================================================================== */
 .metricFiltersContainer {
   display: grid;
@@ -67,8 +71,6 @@
 
 .metricCard {
   --card-color: var(--text-2);
-  --card-bg-dim: transparent;
-
   background: var(--surface);
   border: 2px solid transparent;
   border-radius: 16px;
@@ -85,120 +87,78 @@
   outline: none;
 }
 
-/* Glow Sutil no Fundo */
-.metricCard::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: radial-gradient(circle at right, var(--card-bg-dim), transparent 80%);
-  opacity: 0;
-  transition: opacity 0.4s;
-  pointer-events: none;
-}
-
-/* Barra lateral animada */
-.metricCard::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 30%; bottom: 30%;
-  width: 4px;
-  background: var(--card-color);
-  border-radius: 0 4px 4px 0;
-  opacity: 0.3;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
 .metricCard:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow: var(--shadow-md);
-  border-color: rgba(255, 255, 255, 0.03);
 }
-.metricCard:hover::before { opacity: 0.5; }
-.metricCard:hover::after { top: 20%; bottom: 20%; opacity: 0.6; width: 5px; }
 
-/* ── NOME EM 90 GRAUS ── */
 .metricLabel {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   font-size: 0.65rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.08em;
   color: var(--text-3);
   margin: 0;
-  transition: color 0.3s ease;
   white-space: nowrap;
-  text-align: center;
+  transition: color 0.3s ease;
 }
 
-/* ── NÚMERO ── */
 .metricNumber {
   font-family: 'DM Sans', sans-serif;
   font-size: 2.6rem;
   font-weight: 800;
   color: var(--card-color);
-  line-height: 1;
-  letter-spacing: -0.03em;
-  transition: color 0.3s ease;
   flex: 1;
   text-align: center;
+  transition: color 0.3s ease;
 }
 
-/* ── ESTADOS ATIVOS ── */
+/* ── Estados ativos (borda + elevação) ── */
 .metricCard[class*="active"] {
   border-color: var(--card-color);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
-.metricCard[class*="active"]::before { opacity: 1; }
-.metricCard[class*="active"]::after {
-  top: 0; bottom: 0;
-  width: 6px;
-  opacity: 1;
-  border-radius: 0;
+
+.metricCard[class*="active"] .metricLabel {
+  color: var(--card-color);
 }
-.metricCard[class*="active"] .metricLabel { color: var(--card-color); }
 
-/* ── ESTADOS ATIVOS (Cores Personalizadas) ── */
-
-/* Todas: Branco/Neutro */
+/* ── Cores por status ── */
 .activeTodas {
   --card-color: var(--text);
-  --card-bg-dim: rgba(255, 255, 255, 0.05);
   background: var(--bg-2);
+  border-color: var(--text) !important;
 }
 
-/* Disponível: Verde */
 .activeDISPONIVEL {
   --card-color: var(--success);
-  --card-bg-dim: var(--success-dim);
   background: var(--surface);
+  border-color: var(--success) !important;
 }
 
-/* Ocupada: Laranja */
 .activeOCUPADA {
   --card-color: var(--warning);
-  --card-bg-dim: var(--warning-dim);
   background: var(--surface);
+  border-color: var(--warning) !important;
 }
 
-/* Aguardando Pagamento: Azul */
 .activeAGUARDANDO_PAGAMENTO {
   --card-color: var(--primary);
-  --card-bg-dim: var(--primary-dim);
   background: var(--surface);
+  border-color: var(--primary) !important;
 }
 
-/* Fallback para status desconhecidos */
 .activeDefault {
   --card-color: var(--text);
-  --card-bg-dim: rgba(255, 255, 255, 0.05);
   background: var(--bg-2);
+  border-color: var(--text) !important;
 }
 
 /* ==========================================================================
-   3. GRID DE MESAS E ESTADOS
+   GRID DE MESAS
    ========================================================================== */
 .content {
   flex: 1;
@@ -211,7 +171,11 @@
   align-content: start;
 }
 
-.loadingState, .emptyState {
+/* ==========================================================================
+   ESTADOS VAZIOS / LOADING
+   ========================================================================== */
+.loadingState,
+.emptyState {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -232,18 +196,165 @@
   animation: spin 0.8s linear infinite;
 }
 
+/* ==========================================================================
+   OVERLAY / MODAL GENÉRICO (blur de fundo)
+   ========================================================================== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.blur {
+  filter: blur(8px);
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.modalLock {
+  background: var(--surface);
+  padding: 2rem;
+  border-radius: 12px;
+  text-align: center;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btnLock {
+  background: var(--primary);
+  color: white;
+  padding: 0.8rem 1.5rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+/* ==========================================================================
+   MODAL — CAIXA FECHADO
+   ========================================================================== */
+.caixaOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: fadeInOverlay 0.3s ease-out both;
+}
+
+.caixaModal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 2.5rem 2rem 2rem;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow:
+          0 0 0 1px var(--border),
+          0 24px 80px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  animation: slideUpModal 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.caixaIcone {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  margin-bottom: 0.25rem;
+}
+
+.caixaTitulo {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.caixaDescricao {
+  color: var(--text-2);
+  font-size: 0.9rem;
+  line-height: 1.65;
+  margin: 0;
+  max-width: 280px;
+}
+
+.caixaBtnPrimary {
+  margin-top: 0.75rem;
+  padding: 0.9rem 1.5rem;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: 0.01em;
+}
+
+.caixaBtnPrimary:hover {
+  filter: brightness(1.12);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.caixaBtnPrimary:active {
+  transform: translateY(0);
+  filter: brightness(1);
+}
+
+/* ==========================================================================
+   ANIMAÇÕES
+   ========================================================================== */
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUpModal {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* ==========================================================================
-   RESPONSIVIDADE (MOBILE FIRST / ADJUSTMENTS)
+   RESPONSIVIDADE
    ========================================================================== */
 @media (max-width: 768px) {
-  .page { padding: 1rem; gap: 1.25rem; }
+  .page {
+    padding: 1rem;
+    gap: 1.25rem;
+  }
 
-  /* Como no mobile não tem Portal, a busca cai pra dentro da página,
-     então damos margem inferior nela. */
   .actionsGroup {
     max-width: 100%;
     margin-bottom: 0.5rem;
@@ -264,16 +375,36 @@
     border-radius: 16px;
   }
 
-  .metricNumber { font-size: 2.5rem; }
-  .metricLabel { font-size: 0.7rem; letter-spacing: 0.1em; }
+  .metricNumber {
+    font-size: 2.5rem;
+  }
+
+  .metricLabel {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+  }
 
   .grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.75rem;
   }
+
+  .caixaModal {
+    padding: 2rem 1.5rem 1.75rem;
+    border-radius: 20px;
+  }
+
+  .caixaTitulo {
+    font-size: 1.25rem;
+  }
 }
 
 @media (max-width: 380px) {
-  .metricNumber { font-size: 1.8rem; }
-  .metricLabel { font-size: 0.6rem; }
+  .metricNumber {
+    font-size: 1.8rem;
+  }
+
+  .metricLabel {
+    font-size: 0.6rem;
+  }
 }
