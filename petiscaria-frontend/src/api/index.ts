@@ -1,6 +1,7 @@
 import type { AuthUser, Comanda, LoginResponse, Mesa, PageResponse, Produto } from '../types';
 
-const BASE_URL = '';
+// const BASE_URL = '';
+const BASE_URL = 'http://localhost:8080';
 
 function getToken(): string | null {
     const raw = localStorage.getItem('petiscaria_auth');
@@ -47,21 +48,43 @@ export const authApi = {
 // ── Mesas ─────────────────────────────────────────────────────────────────────
 export const mesasApi = {
     listarTodas: () => request<Mesa[]>('/api/mesas'),
-    listarDisponiveis: () => request<Mesa[]>('/api/mesas/disponiveis'),
 };
 
 // ── Pedidos ──────────────────────────────────────────────────────────────────
-// Adicione isto no seu arquivo api.ts
-// ── Pedidos ──────────────────────────────────────────────────────────────────
 export const pedidosApi = {
-    entregar: (id: number) =>
-        request<void>(`/api/pedidos/${id}/entregar`, { method: 'PATCH' }),
 
     entregarItem: (itemId: number) =>
         request<void>(`/api/pedidos/item/${itemId}/entregar`, { method: 'PATCH' }),
+};
 
-    cancelar: (id: number) =>
-        request<void>(`/api/pedidos/${id}/cancelar`, { method: 'PATCH' }),
+// ── Caixa ──────────────────────────────────────────────────────────────────
+export const caixaApi = {
+    buscarAtivo: () =>
+        request<any>('/api/caixa/ativo'),
+
+    abrir: (dadosAbertura: any) =>
+        request<any>('/api/caixa/abrir', {
+            method: 'POST',
+            body: JSON.stringify(dadosAbertura) // 🌟 Agora enviamos o objeto da contagem
+        }),
+
+    fechar: (dadosFechamento: any) =>
+        request<any>('/api/caixa/fechar', {
+            method: 'POST',
+            body: JSON.stringify(dadosFechamento) // 🌟 Isso transforma o objeto em JSON no corpo
+        }),
+
+    movimentar: (tipo: 'SUPRIMENTO' | 'SANGRIA', valor: number, motivo: string) =>
+        request<any>(
+            `/api/caixa/movimentar?tipo=${tipo}&valor=${valor}&motivo=${encodeURIComponent(motivo)}`,
+            { method: 'POST' }
+        ),
+
+    gerarRelatorio: (id: number) =>
+        request<any>(`/api/caixa/relatorio/${id}`),
+
+    listarHistorico: () =>
+        request<any[]>('/api/caixa/historico'),
 };
 
 // ── Enuns ──────────────────────────────────────────────────────────────────

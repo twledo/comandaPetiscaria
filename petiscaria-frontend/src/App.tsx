@@ -5,7 +5,11 @@ import LoginPage from './pages/LoginPage';
 import MesasPage from './pages/MesasPage';
 import GestaoPage from './pages/GestaoPage';
 
-type Page = 'mesas' | 'gestao';
+// 🌟 1. Importe a nova tela do caixa (ajuste o caminho se tiver salvo dentro da pasta pages)
+import TelaCaixa from './components/caixa/TelaCaixa';
+
+// 🌟 2. Adicione 'caixa' aos tipos permitidos
+type Page = 'mesas' | 'gestao' | 'caixa';
 
 export default function App() {
   const { user, isAdmin } = useAuth();
@@ -13,13 +17,16 @@ export default function App() {
 
   if (!user) return <LoginPage />;
 
-  // Garçom cannot access gestao
-  const safePage: Page = page === 'gestao' && !isAdmin ? 'mesas' : page;
+  // 🌟 3. Proteção de rota: Garçom não pode acessar 'gestao' nem 'caixa'
+  const safePage: Page = (page === 'gestao' || page === 'caixa') && !isAdmin ? 'mesas' : page;
 
   return (
       <AppLayout activePage={safePage} onNavigate={setPage}>
         {safePage === 'mesas' && <MesasPage />}
         {safePage === 'gestao' && isAdmin && <GestaoPage />}
+
+        {/* 🌟 4. Renderize a tela do caixa quando estiver ativa */}
+        {safePage === 'caixa' && isAdmin && <TelaCaixa />}
       </AppLayout>
   );
 }

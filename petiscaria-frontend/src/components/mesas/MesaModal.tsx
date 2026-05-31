@@ -22,7 +22,9 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
     const [showDivisao, setShowDivisao] = useState(false);
 
     const comanda = mesa.comandaAtiva;
-    const temPedidoPendente = comanda?.pedidos?.some((p: any) => p.status === 'PENDENTE');
+    const temPedidoPendente = comanda?.pedidos?.some((pedido: any) =>
+        pedido.itens?.some((item: any) => item.status === 'PENDENTE')
+    );
 
     async function exec(fn: () => Promise<any>) {
         setError('');
@@ -65,7 +67,11 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
     // ── Renderização Principal da Mesa ──
     return (
         <div className={styles.backdrop} onClick={e => e.target === e.currentTarget && onClose()}>
-            <div className={`${styles.modal} animate-scale`}>
+            <div
+                className={`${styles.modal} ${
+                    mesa.status === 'DISPONIVEL' ? styles.modalPequeno : ''
+                } animate-scale`}
+            >
 
                 <div className={styles.header}>
                     <div>
@@ -190,13 +196,16 @@ export default function MesaModal({mesa, statusLabel, onClose, onRefresh}: Props
 
 function ComandaResumo({
                            comanda,
+                           mesa,        // 🌟 Adicione esta linha
                            onRefresh,
                            exec
                        }: {
     comanda: NonNullable<Mesa['comandaAtiva']>,
+    mesa: Mesa,  // 🌟 Adicione esta linha
     onRefresh: () => Promise<void>,
     exec: (fn: () => Promise<any>) => void
 }) {
+    //
     const {isAdmin} = useAuth();
     const [processandoItem, setProcessandoItem] = useState<number | null>(null);
     const [confirmarEstorno, setConfirmarEstorno] = useState<{ itemId: number; nome: string } | null>(null);
@@ -205,12 +214,28 @@ function ComandaResumo({
     const MIN_CARACTERES = 10;
 
     // 🌟 NOVO: Estado para controlar a aba selecionada
-    const [abaAtiva, setAbaAtiva] = useState<'RESUMO' | 'ENTREGUES' | 'CANCELADOS'>('RESUMO');
+    const [abaAtiva, setAbaAtiva] = useState<'PENDENTES' | 'ENTREGUES' | 'CANCELADOS'>('PENDENTES');
 
     const pedidos = (comanda as any).pedidos || [];
     const itens = pedidos.flatMap((pedido: any) => {
         return pedido.itens || [];
     });
+
+    // 1. Defina as abas baseadas no status da mesa
+    const abasDisponiveis = useMemo(() => {
+        if (mesa.status === 'AGUARDANDO_PAGAMENTO') {
+            return ['ENTREGUES', 'CANCELADOS'];
+        }
+        return ['PENDENTES', 'ENTREGUES', 'CANCELADOS'];
+    }, [mesa.status]);
+
+// 2. Garanta que a aba ativa mude se a aba atual sumir
+// (Se estiver em PENDENTES e a mesa passar para AGUARDANDO_PAGAMENTO, muda para ENTREGUES)
+    React.useEffect(() => {
+        if (mesa.status === 'AGUARDANDO_PAGAMENTO' && abaAtiva === 'PENDENTES') {
+            setAbaAtiva('ENTREGUES');
+        }
+    }, [mesa.status, abaAtiva]);
 
     async function estornar(itemId: number, motivo: string) {
         setProcessandoItem(itemId);
@@ -240,24 +265,29 @@ function ComandaResumo({
         }
     }
 
-    // 🎨 Lógica centralizada de filtros para as abas
-    const itensPendentes = itens.filter((i: any) => {
-        const isCancelado = String(i.status).toUpperCase() === 'CANCELADO';
-        const isEntregue = String(i.status).toUpperCase() === 'ENTREGUE' || String(i.status).toUpperCase() === 'PRONTO' || i.entregue === true;
+// 🎨 Lógica centralizada e robusta
+    const itensPendentes = useMemo(() => itens.filter((i: any) => {
+        const status = String(i.status || '').toUpperCase();
+        // Um item é PENDENTE se ele NÃO for cancelado E (não for entregue E não tiver a flag entregue true)
+        const isEntregue = status === 'ENTREGUE' || status === 'PRONTO' || i.entregue === true;
+        const isCancelado = status === 'CANCELADO';
         return !isCancelado && !isEntregue;
-    });
+    }), [itens]);
 
-    const itensEntregues = itens.filter((i: any) => {
-        const isCancelado = String(i.status).toUpperCase() === 'CANCELADO';
-        const isEntregue = String(i.status).toUpperCase() === 'ENTREGUE' || String(i.status).toUpperCase() === 'PRONTO' || i.entregue === true;
+    const itensEntregues = useMemo(() => itens.filter((i: any) => {
+        const status = String(i.status || '').toUpperCase();
+        const isEntregue = status === 'ENTREGUE' || status === 'PRONTO' || i.entregue === true;
+        const isCancelado = status === 'CANCELADO';
         return !isCancelado && isEntregue;
-    });
+    }), [itens]);
 
-    const itensCancelados = itens.filter((i: any) => String(i.status).toUpperCase() === 'CANCELADO');
+    const itensCancelados = useMemo(() => itens.filter((i: any) => {
+        return String(i.status || '').toUpperCase() === 'CANCELADO';
+    }), [itens]);
 
     // Define qual array vai ser desenhado na tela com base na aba clicada
     let itensParaExibir = [];
-    if (abaAtiva === 'RESUMO') itensParaExibir = itensPendentes;
+    if (abaAtiva === 'PENDENTES') itensParaExibir = itensPendentes;
     else if (abaAtiva === 'ENTREGUES') itensParaExibir = itensEntregues;
     else if (abaAtiva === 'CANCELADOS') itensParaExibir = itensCancelados;
 
@@ -265,15 +295,15 @@ function ComandaResumo({
         <div className={styles.itensSection}>
             {/* Cabeçalho com Abas */}
             <div className={styles.tabsContainer}>
-                {['RESUMO', 'ENTREGUES', 'CANCELADOS'].map((aba) => (
+                {abasDisponiveis.map((aba) => (
                     <button
                         key={aba}
                         className={`${styles.tabBtn} ${abaAtiva === aba ? styles.tabBtnActive : ''}`}
-                        onClick={() => setAbaAtiva(aba)}
+                        onClick={() => setAbaAtiva(aba as any)}
                     >
                         {aba.charAt(0) + aba.slice(1).toLowerCase()}
                         <span className={styles.tabBadge}>
-                        {aba === 'RESUMO' ? itensPendentes.length :
+                        {aba === 'PENDENTES' ? itensPendentes.length :
                             aba === 'ENTREGUES' ? itensEntregues.length : itensCancelados.length}
                     </span>
                     </button>
@@ -315,7 +345,11 @@ function ComandaResumo({
                                                 <span className={styles.itemNome} style={isCancelado ? { textDecoration: 'line-through', color: 'var(--red)' } : {}}>
                                                     {nomeDoProduto} {item.meiaPorcao && <span className={styles.meiaTag}>Meia</span>}
                                                 </span>
-                                                    <span className={styles.itemQtd}>x{item.quantidade}</span>
+                                                    <span className={styles.itemQtd}>
+                                                      x{item.quantidade}
+                                                    {/* 🌟 ADICIONE ESTA LINHA PARA MOSTRAR O VALOR */}
+                                                    {item.precoUnitario && ` - R$ ${Number(item.precoUnitario).toFixed(2).replace('.', ',')}`}
+                                                    </span>
                                                 </div>
 
                                                 <div style={{ marginTop: '4px', fontSize: '0.8rem', color: 'var(--text-3)', display: 'flex', flexWrap: 'wrap', gap: '8px', fontStyle: 'italic' }}>

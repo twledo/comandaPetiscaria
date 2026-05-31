@@ -5,8 +5,9 @@ import styles from './AppLayout.module.css';
 
 interface Props {
     children: React.ReactNode;
-    activePage: 'mesas' | 'gestao';
-    onNavigate: (page: 'mesas' | 'gestao') => void;
+    // 🌟 1. Adicionamos 'caixa' como uma página válida
+    activePage: 'mesas' | 'gestao' | 'caixa';
+    onNavigate: (page: 'mesas' | 'gestao' | 'caixa') => void;
 }
 
 export default function AppLayout({ children, activePage, onNavigate }: Props) {
@@ -34,18 +35,27 @@ export default function AppLayout({ children, activePage, onNavigate }: Props) {
                         className={`${styles.navItem} ${activePage === 'mesas' ? styles.active : ''}`}
                         onClick={() => { onNavigate('mesas'); setSidebarOpen(false); }}
                     >
-                        <span className={styles.navIcon}>⊞</span>
                         <span>Mapa de Mesas</span>
                     </button>
 
+                    {/* Menu exclusivo para ADMIN */}
                     {isAdmin && (
-                        <button
-                            className={`${styles.navItem} ${activePage === 'gestao' ? styles.active : ''}`}
-                            onClick={() => { onNavigate('gestao'); setSidebarOpen(false); }}
-                        >
-                            <span className={styles.navIcon}>◈</span>
-                            <span>Gestão</span>
-                        </button>
+                        <>
+                            <button
+                                className={`${styles.navItem} ${activePage === 'gestao' ? styles.active : ''}`}
+                                onClick={() => { onNavigate('gestao'); setSidebarOpen(false); }}
+                            >
+                                <span>Gestão</span>
+                            </button>
+
+                            {/* 🌟 2. NOVO BOTÃO DO CAIXA AQUI */}
+                            <button
+                                className={`${styles.navItem} ${activePage === 'caixa' ? styles.active : ''}`}
+                                onClick={() => { onNavigate('caixa'); setSidebarOpen(false); }}
+                            >
+                                <span>Caixa</span>
+                            </button>
+                        </>
                     )}
                 </nav>
 
@@ -75,7 +85,6 @@ export default function AppLayout({ children, activePage, onNavigate }: Props) {
 
             {/* Main */}
             <div className={styles.main}>
-                {/* 👇 CABEÇALHO MODIFICADO AQUI 👇 */}
                 <header className={styles.topbar} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <button
@@ -85,11 +94,13 @@ export default function AppLayout({ children, activePage, onNavigate }: Props) {
                             ☰
                         </button>
                         <h2 className={styles.pageTitle} style={{ margin: 0 }}>
-                            {activePage === 'mesas' ? 'Mapa de Mesas' : 'Gestão de Produtos'}
+                            {/* 🌟 3. Atualizamos o título da página no cabeçalho */}
+                            {activePage === 'mesas' && 'Mapa de Mesas'}
+                            {activePage === 'gestao' && 'Gestão de Produtos'}
+                            {activePage === 'caixa' && 'Controle de Caixa'}
                         </h2>
                     </div>
 
-                    {/* 👇 O "BURACO DE MINHOCA" DO PORTAL FICA AQUI 👇 */}
                     <div id="topbar-actions" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', paddingRight: '1rem' }}></div>
                 </header>
 

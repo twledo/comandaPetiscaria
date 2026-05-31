@@ -354,7 +354,7 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                                 value={observacaoTemp}
                                 // 🌟 Limitador de caracteres no próprio onChange
                                 onChange={(e) => {
-                                    if (e.target.value.length <= 60) {
+                                    if (e.target.value.length <= 30) {
                                         setObservacaoTemp(e.target.value);
                                     }
                                 }}
@@ -366,10 +366,10 @@ export default function LancarItensModal({ comanda, mesa, onClose, onRefresh }: 
                             <div style={{
                                 fontSize: '0.75rem',
                                 textAlign: 'right',
-                                color: observacaoTemp.length >= 60 ? 'var(--red)' : 'var(--text-3)',
-                                fontWeight: observacaoTemp.length >= 60 ? 'bold' : 'normal'
+                                color: observacaoTemp.length >= 30 ? 'var(--red)' : 'var(--text-3)',
+                                fontWeight: observacaoTemp.length >= 30 ? 'bold' : 'normal'
                             }}>
-                                {observacaoTemp.length}/60
+                                {observacaoTemp.length}/30
                             </div>
                         </div>
 
