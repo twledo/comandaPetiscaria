@@ -25,6 +25,8 @@ public record PagamentoParcialDTO(
             @NotNull(message = "Valor é obrigatório")
             BigDecimal valor,
 
+            BigDecimal valorEntregue,
+
             @NotNull(message = "Método de pagamento é obrigatório")
             MetodoPagamento metodoPagamento
     ) {}

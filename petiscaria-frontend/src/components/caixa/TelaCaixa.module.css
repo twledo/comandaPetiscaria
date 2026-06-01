@@ -23,7 +23,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 80vh;
+    height: 45vh;
 }
 
 .cardFechado {
@@ -335,6 +335,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .totalCalculadoBox {
+    margin-top: 1rem;
     background: var(--primary-dim);
     border: 1px solid var(--primary);
     border-radius: 12px;

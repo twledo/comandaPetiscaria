@@ -1,6 +1,6 @@
 import type { AuthUser, Comanda, LoginResponse, Mesa, PageResponse, Produto } from '../types';
 
-// const BASE_URL = '';
+// const BASE_URL = ''; //TROCAR RSYNC
 const BASE_URL = 'http://localhost:8080';
 
 function getToken(): string | null {
@@ -77,15 +77,15 @@ export const caixaApi = {
     movimentar: (tipo: 'SUPRIMENTO' | 'SANGRIA', valor: number, motivo: string) =>
         request<any>(
             `/api/caixa/movimentar?tipo=${tipo}&valor=${valor}&motivo=${encodeURIComponent(motivo)}`,
-            { method: 'POST' }
+            {method: 'POST'}
         ),
 
     gerarRelatorio: (id: number) =>
         request<any>(`/api/caixa/relatorio/${id}`),
 
-    listarHistorico: () =>
-        request<any[]>('/api/caixa/historico'),
-};
+    listarHistorico: (page: number, size: number, data?: string) =>
+        request<any>(`/api/caixa/historico?page=${page}&size=${size}${data ? `&data=${data}` : ''}`),
+}
 
 // ── Enuns ──────────────────────────────────────────────────────────────────
 export interface Opcao {

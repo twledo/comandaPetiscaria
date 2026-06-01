@@ -35,9 +35,7 @@ public class SecurityConfig {
                     var config = new org.springframework.web.cors.CorsConfiguration();
 
                     config.setAllowedOriginPatterns(java.util.List.of(
-                            "http://localhost:5173",
-                            "http://192.168.100.184:5173", // Seu IP atual
-                            "http://192.168.100.*:5173",    // Qualquer dispositivo na sua rede
+                            "http://localhost",
                             "https://reidoespetinhopetiscaria.com",
                             "https://www.reidoespetinhopetiscaria.com"
                     ));
@@ -56,6 +54,12 @@ public class SecurityConfig {
 
                     // Liberar o Handshake do WebSocket ANTES das outras regras
                     req.requestMatchers("/ws-petiscaria/**").permitAll();
+
+                    req.requestMatchers(
+                            "/v3/api-docs/**",
+                            "/swagger-ui/**",
+                            "/swagger-ui.html"
+                    ).permitAll();
 
                     req.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/**").permitAll();
 

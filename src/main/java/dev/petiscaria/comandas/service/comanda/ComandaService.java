@@ -346,14 +346,20 @@ public class ComandaService {
 
             case VALOR_LIVRE -> {
                 for (PagamentoParcialDTO.ParcelaPessoa p : dto.parcelas()) {
-                    novosRecebimentos.add(ComandaRecebimento.builder()
+                    ComandaRecebimento.ComandaRecebimentoBuilder builder = ComandaRecebimento.builder()
                             .comanda(comanda)
                             .valor(p.valor())
                             .metodoPagamento(p.metodoPagamento())
                             .dataRecebimento(LocalDateTime.now())
                             .usuario(usuario)
-                            .observacao("Divisão Livre")
-                            .build());
+                            .observacao("Divisão Livre");
+
+                    // Se for dinheiro e tiver valor entregue, seta para calcular troco
+                    if (p.metodoPagamento() == MetodoPagamento.DINHEIRO && p.valorEntregue() != null) {
+                        builder.valorEntregue(p.valorEntregue());
+                    }
+
+                    novosRecebimentos.add(builder.build());
                 }
                 detalheAuditoria = "Divisão Livre registrada com múltiplos métodos.";
             }
@@ -373,25 +379,41 @@ public class ComandaService {
 
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
-    public void finalizarAtendimento(Long comandaId, String usuarioCaixa, MetodoPagamento metodoPagamento) {
-        // CORREÇÃO: método de pagamento agora é parâmetro obrigatório
+    public void finalizarAtendimento(Long comandaId, String usuarioCaixa, MetodoPagamento metodoPagamento, BigDecimal valorEntregue) {
         if (metodoPagamento == null) {
-            throw new IllegalArgumentException("O método de pagamento é obrigatório para finalizar o atendimento.");
+            throw new IllegalArgumentException("O método de pagamento é obrigatório.");
         }
 
         Comanda comanda = buscarPorIdOuFalhar(comandaId);
         Mesa mesa = comanda.getMesa();
+
         if (mesa.getStatus() != StatusMesa.AGUARDANDO_PAGAMENTO)
             throw new IllegalStateException("Mesa não está em conferência.");
 
-        ComandaRecebimento recebimento = ComandaRecebimento.builder()
+        // Construção do objeto de recebimento
+        ComandaRecebimento.ComandaRecebimentoBuilder builder = ComandaRecebimento.builder()
                 .comanda(comanda)
                 .valor(comanda.getTotal())
-                .metodoPagamento(metodoPagamento) // CORREÇÃO: método setado corretamente
+                .metodoPagamento(metodoPagamento)
                 .dataRecebimento(LocalDateTime.now())
                 .usuario(usuarioCaixa)
-                .observacao("Pgto Integral")
-                .build();
+                .observacao("Pgto Integral");
+
+        // Lógica do troco
+        if (metodoPagamento == MetodoPagamento.DINHEIRO && valorEntregue != null) {
+
+            // Cálculo do troco
+            BigDecimal troco = valorEntregue.subtract(comanda.getTotal());
+            builder.valorEntregue(valorEntregue);
+            builder.valorTroco(troco.compareTo(BigDecimal.ZERO) > 0 ? troco : BigDecimal.ZERO);
+        } else {
+
+            // Caso seja PIX/Cartão, o valorEntregue é o próprio valor da conta
+            builder.valorEntregue(comanda.getTotal());
+            builder.valorTroco(BigDecimal.ZERO);
+        }
+
+        ComandaRecebimento recebimento = builder.build();
         recebimentoRepository.save(recebimento);
 
         finalizarProcesso(comanda, usuarioCaixa);

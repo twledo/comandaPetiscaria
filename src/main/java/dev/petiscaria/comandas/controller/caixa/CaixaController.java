@@ -6,12 +6,18 @@ import dev.petiscaria.comandas.models.caixa.MovimentacaoCaixa;
 import dev.petiscaria.comandas.models.caixa.SessaoCaixa;
 import dev.petiscaria.comandas.service.caixa.CaixaService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -62,7 +68,9 @@ public class CaixaController {
 
     @GetMapping("/historico")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<SessaoCaixa>> listarHistorico() {
-        return ResponseEntity.ok(caixaService.listarHistorico());
+    public ResponseEntity<Page<SessaoCaixa>> listarHistorico(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data,
+            @PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(caixaService.listarHistorico(data, pageable));
     }
 }

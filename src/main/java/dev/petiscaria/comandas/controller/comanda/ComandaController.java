@@ -15,6 +15,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+
 @RestController
 @RequestMapping("/api/comandas")
 @RequiredArgsConstructor
@@ -132,8 +134,9 @@ public class ComandaController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> finalizarAtendimento(
             @PathVariable Long id,
-            @RequestParam MetodoPagamento metodoPagamento) {
-        comandaService.finalizarAtendimento(id, getUsuarioLogado(), metodoPagamento);
+            @RequestParam MetodoPagamento metodoPagamento,
+            @RequestParam BigDecimal valorEntregue) {
+        comandaService.finalizarAtendimento(id, getUsuarioLogado(), metodoPagamento, valorEntregue);
         return ResponseEntity.ok().build();
     }
 }

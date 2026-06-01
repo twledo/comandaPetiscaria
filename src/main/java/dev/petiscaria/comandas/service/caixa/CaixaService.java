@@ -13,12 +13,15 @@ import dev.petiscaria.comandas.repository.caixa.SessaoCaixaRepository;
 import dev.petiscaria.comandas.repository.comanda.ComandaRecebimentoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -43,8 +46,13 @@ public class CaixaService {
         return sessaoCaixaRepository.findByStatus(StatusCaixa.ABERTO);
     }
 
-    public List<SessaoCaixa> listarHistorico() {
-        return sessaoCaixaRepository.findAllByOrderByIdDesc();
+    public Page<SessaoCaixa> listarHistorico(LocalDate data, Pageable pageable) {
+        if (data != null) {
+            LocalDateTime inicio = data.atStartOfDay();
+            LocalDateTime fim = data.plusDays(1).atStartOfDay();
+            return sessaoCaixaRepository.findByDataAberturaBetween(inicio, fim, pageable);
+        }
+        return sessaoCaixaRepository.findAllByOrderByIdDesc(pageable);
     }
 
     @Transactional
@@ -155,6 +163,7 @@ public class CaixaService {
         List<ComandaRecebimento> recebimentos = recebimentoRepository.findByDataRecebimentoBetween(inicio, fim);
         List<MovimentacaoCaixa> movimentacoes = movimentacaoCaixaRepository.findBySessaoCaixaIdOrderByTimestampDesc(sessao.getId());
 
+        long qtdDinheiro = 0, qtdPix = 0, qtdDebito = 0, qtdCredito = 0;
         BigDecimal totalDinheiro = BigDecimal.ZERO;
         BigDecimal totalPix = BigDecimal.ZERO;
         BigDecimal totalDebito = BigDecimal.ZERO;
@@ -162,14 +171,11 @@ public class CaixaService {
 
         for (ComandaRecebimento r : recebimentos) {
             BigDecimal v = r.getValor() != null ? r.getValor() : BigDecimal.ZERO;
-            if (r.getMetodoPagamento() == MetodoPagamento.DINHEIRO) {
-                totalDinheiro = totalDinheiro.add(v);
-            } else if (r.getMetodoPagamento() == MetodoPagamento.PIX) {
-                totalPix = totalPix.add(v);
-            } else if (r.getMetodoPagamento() == MetodoPagamento.CARTAO_DEBITO) {
-                totalDebito = totalDebito.add(v);
-            } else if (r.getMetodoPagamento() == MetodoPagamento.CARTAO_CREDITO) {
-                totalCredito = totalCredito.add(v);
+            switch (r.getMetodoPagamento()) {
+                case DINHEIRO -> { totalDinheiro = totalDinheiro.add(v); qtdDinheiro++; }
+                case PIX -> { totalPix = totalPix.add(v); qtdPix++; }
+                case CARTAO_DEBITO -> { totalDebito = totalDebito.add(v); qtdDebito++; }
+                case CARTAO_CREDITO -> { totalCredito = totalCredito.add(v); qtdCredito++; }
             }
         }
 
@@ -184,6 +190,11 @@ public class CaixaService {
                 totalSangrias = totalSangrias.add(v);
             }
         }
+
+        BigDecimal totalTroco = recebimentos.stream()
+                .filter(r -> r.getMetodoPagamento() == MetodoPagamento.DINHEIRO && r.getValorTroco() != null)
+                .map(ComandaRecebimento::getValorTroco)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal saldoInicial = sessao.getSaldoInicial() != null ? sessao.getSaldoInicial() : BigDecimal.ZERO;
         BigDecimal esperadoDinheiro = saldoInicial.add(totalDinheiro).add(totalSuprimentos).subtract(totalSangrias);
@@ -209,6 +220,11 @@ public class CaixaService {
         relatorio.put("saldoDinheiroContado", sessao.getSaldoDinheiroFechamento());
         relatorio.put("diferencaCaixa", sessao.getStatus() == StatusCaixa.FECHADO ? diferenca : BigDecimal.ZERO);
         relatorio.put("observacoes", sessao.getObservacoes());
+        relatorio.put("qtdDinheiro", qtdDinheiro);
+        relatorio.put("qtdPix", qtdPix);
+        relatorio.put("qtdDebito", qtdDebito);
+        relatorio.put("qtdCredito", qtdCredito);
+        relatorio.put("totalTrocoDado", totalTroco);
 
         return relatorio;
     }

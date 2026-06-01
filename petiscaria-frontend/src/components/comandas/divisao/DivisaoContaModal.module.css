@@ -18,6 +18,251 @@
     from { opacity: 0; backdrop-filter: blur(0px); }
     to { opacity: 1; backdrop-filter: blur(8px); }
 }
+/* ==========================================================================
+   MODAL DE TROCO (DARK/LIGHT ADAPTIVO)
+   ========================================================================== */
+.trocoOverlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+.trocoModal {
+    background: var(--surface); /* Fundo dinâmico (Preto no dark, branco no light) */
+    border-radius: 24px;
+    width: 100%;
+    max-width: 420px;
+    padding: 24px;
+    border: 1px solid var(--border);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    animation: modalEnter 0.3s ease-out forwards;
+}
+
+.trocoHeader {
+    text-align: center;
+}
+
+.trocoIcon {
+    width: 56px;
+    height: 56px;
+    background: color-mix(in srgb, var(--success) 15%, transparent);
+    color: var(--success);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 12px;
+    font-size: 28px;
+}
+
+.trocoTitle {
+    margin: 0;
+    color: var(--text);
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.trocoSubtitle {
+    margin: 4px 0 0;
+    color: var(--text-2);
+    font-size: 0.95rem;
+}
+
+.trocoSubtitle strong {
+    color: var(--text);
+}
+
+.valorCobrarBox {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.valorCobrarLabel {
+    color: var(--text-2);
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.valorCobrarAmount {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--success);
+}
+
+.resumoBox {
+    background: var(--bg-3);
+    border-radius: 12px;
+    padding: 12px 16px;
+    border: 1px dashed var(--border);
+    font-size: 0.85rem;
+    color: var(--text-2);
+}
+
+.resumoTitle {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text);
+    font-weight: bold;
+}
+
+.resumoList {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.trocoInputLabel {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text);
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.trocoInput {
+    width: 100%;
+    padding: 16px;
+    font-size: 2rem;
+    text-align: center;
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    outline: none;
+    transition: all 0.2s;
+    font-weight: 800;
+    color: var(--text);
+    box-sizing: border-box;
+    background-color: var(--bg-2);
+    font-family: 'DM Sans', monospace;
+}
+
+.trocoInput:focus {
+    border-color: var(--success);
+    background-color: var(--surface);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 20%, transparent);
+}
+
+.trocoDevolverBox {
+    background: color-mix(in srgb, var(--warning, #f59e0b) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 30%, transparent);
+    border-radius: 16px;
+    padding: 16px;
+}
+
+.trocoDevolverHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.trocoDevolverLabel {
+    color: var(--text);
+    font-weight: 800;
+}
+
+.trocoDevolverAmount {
+    color: var(--warning, #d97706);
+    font-weight: 800;
+    font-size: 1.4rem;
+}
+
+.trocoDevolverList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.trocoDevolverList li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.95rem;
+    color: var(--text-2);
+}
+
+.trocoDevolverList b {
+    color: var(--text);
+    font-weight: 800;
+}
+
+.trocoFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.trocoFooterStatus {
+    font-size: 0.85rem;
+    color: var(--text-2);
+    font-weight: 600;
+}
+
+.trocoFooterBtns {
+    display: flex;
+    gap: 12px;
+}
+
+.trocoCancelBtn {
+    padding: 12px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: background 0.2s;
+    font-size: 0.95rem;
+}
+
+.trocoCancelBtn:hover {
+    background-color: var(--bg-3);
+    color: var(--text);
+}
+
+.trocoConfirmBtn {
+    padding: 12px 28px;
+    border: none;
+    background: var(--success);
+    color: #fff;
+    font-weight: 800;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+
+.trocoConfirmBtn:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px color-mix(in srgb, var(--success) 30%, transparent);
+}
+
+.trocoConfirmBtn:disabled {
+    background: var(--bg-3);
+    color: var(--text-3);
+    cursor: not-allowed;
+    box-shadow: none;
+}
 
 .modal {
     width: 640px;

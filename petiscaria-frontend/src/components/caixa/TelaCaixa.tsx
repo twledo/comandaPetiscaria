@@ -1,30 +1,39 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useMemo} from 'react';
 import {caixaApi} from '../../api';
 import styles from './TelaCaixa.module.css';
 
 export default function TelaCaixa() {
     const [sessao, setSessao] = useState<any>(null);
-    const [historico, setHistorico] = useState<any[]>([]);
+    const [historico, setHistorico] = useState<any[]>([]); // Lista de itens
+    const [paginacao, setPaginacao] = useState({
+        page: 0,
+        totalPages: 0
+    });
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState<'ABRIR' | 'FECHAR' | 'SUPRIMENTO' | 'SANGRIA' | 'RELATORIO' | null>(null);
     const [selectedSessaoId, setSelectedSessaoId] = useState<number | null>(null);
     const [saldoEsperado, setSaldoEsperado] = useState<number>(0);
 
-    useEffect(() => {
-        carregarDados();
-    }, []);
+    const [dataFiltro, setDataFiltro] = useState<string>('');
+    const [inputType, setInputType] = useState<'text' | 'date'>('text'); // Truque para o dd/mm/aaaa
 
-    async function carregarDados() {
+    useEffect(() => {
+        carregarDados(paginacao.page);
+    }, [dataFiltro, paginacao.page]); // <--- Ele vai reagir a qualquer mudança na data ou página
+
+    async function carregarDados(page: number = 0) {
         setLoading(true);
         try {
-            const [ativo, hist] = await Promise.all([
+            // Passamos a dataFiltro para o back-end
+            const [ativo, res] = await Promise.all([
                 caixaApi.buscarAtivo().catch(() => null),
-                caixaApi.listarHistorico().catch(() => [])
+                caixaApi.listarHistorico(page, 10, dataFiltro).catch(() => ({ content: [], totalPages: 0, number: 0 }))
             ]);
             setSessao(ativo || null);
-            setHistorico(hist || []);
+            setHistorico(res.content || []);
+            setPaginacao({ page: res.number, totalPages: res.totalPages });
         } catch (error) {
-            console.error("Erro ao carregar dados do caixa", error);
+            console.error("Erro ao carregar dados", error);
         } finally {
             setLoading(false);
         }
@@ -34,10 +43,28 @@ export default function TelaCaixa() {
         return new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(valor || 0);
     };
 
-    const formatarData = (d: string | null) => {
+    const historicoFiltrado = useMemo(() => {
+        // Se não tiver data selecionada, retorna VAZIO por padrão
+        if (!dataFiltro) return [];
+
+        return historico.filter(turno => {
+            if (!turno.dataAbertura) return false;
+            const dataAberturaTurno = turno.dataAbertura.split('T')[0];
+            return dataAberturaTurno === dataFiltro;
+        });
+    }, [historico, dataFiltro]);
+
+    const formatarData = (d: string | null, nomeOperador?: string) => {
         if (!d) return "Em aberto";
         const date = new Date(d);
-        return date.getFullYear() < 2020 ? "Em aberto" : date.toLocaleString('pt-BR');
+        if (date.getFullYear() < 2020) return "Em aberto";
+
+        const dataFormatada = date.toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        }).replace(',', ' -');
+
+        return nomeOperador ? `${dataFormatada}h, por ${nomeOperador}` : dataFormatada;
     };
 
     if (loading) {
@@ -67,8 +94,7 @@ export default function TelaCaixa() {
                         <div>
                             <h1 className={styles.title}>Caixa Ativo</h1>
                             <p className={styles.subtitle}>
-                                Aberto
-                                por <b>{sessao.usuarioAbertura}</b> em <b>{new Date(sessao.dataAbertura).toLocaleString('pt-BR')}</b>
+                                Aberto por <b>{sessao.usuarioAbertura}</b> em <b>{new Date(sessao.dataAbertura).toLocaleString('pt-BR')}</b>
                             </p>
                         </div>
                         <div>
@@ -76,7 +102,6 @@ export default function TelaCaixa() {
                                 className={styles.btnDanger}
                                 onClick={async () => {
                                     try {
-                                        // Busca o relatório parcial do turno ativo para obter o saldo esperado
                                         const rel = await caixaApi.gerarRelatorio(sessao.id);
                                         setSaldoEsperado(Number(rel.saldoEsperadoDinheiro) || 0);
                                     } catch {
@@ -109,24 +134,70 @@ export default function TelaCaixa() {
             )}
 
             <section className={styles.sectionMovimentacoes}>
-                <h3 className={styles.sectionTitle}>Histórico de Fechamentos</h3>
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem'
+                }}>
+                    <h3 className={styles.sectionTitle} style={{ margin: 0 }}>Histórico de Fechamentos</h3>
 
-                {historico.length === 0 ? (
-                    <p className={styles.emptyMsg}>Nenhum registro de turno encontrado no sistema.</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <label style={{ fontSize: '0.9rem', color: 'var(--text-2)' }}>Filtrar por data:</label>
+                        <input
+                            type={dataFiltro ? 'date' : inputType}
+                            onFocus={() => setInputType('date')}
+                            onBlur={() => setInputType('text')}
+                            placeholder="mm/dd/aaaa"
+                            value={dataFiltro}
+                            onChange={(e) => setDataFiltro(e.target.value)}
+                            style={{
+                                padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)',
+                                background: 'var(--bg-1)', color: 'var(--text-1)', outline: 'none',
+                                fontFamily: 'inherit', width: '150px'
+                            }}
+                        />
+                        {dataFiltro && (
+                            <button
+                                onClick={() => setDataFiltro('')}
+                                style={{
+                                    padding: '0.5rem', background: 'transparent', border: 'none',
+                                    color: 'var(--red)', cursor: 'pointer', fontSize: '0.8rem'
+                                }}
+                            >
+                                Limpar
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {!dataFiltro ? (
+                    <div style={{
+                        textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-2)',
+                        background: 'var(--bg-1)', borderRadius: '8px', border: '1px dashed var(--border)'
+                    }}>
+                        <p style={{ margin: 0, fontWeight: 500 }}>Selecione uma data</p>
+                        <span style={{ fontSize: '0.85rem' }}>Escolha um dia no filtro acima para visualizar os turnos.</span>
+                    </div>
+                ) : historicoFiltrado.length === 0 ? (
+                    <div style={{
+                        textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-2)',
+                        background: 'var(--bg-1)', borderRadius: '8px', border: '1px dashed var(--border)'
+                    }}>
+                        <p style={{ margin: 0, fontWeight: 500 }}>Nenhum turno registrado neste dia.</p>
+                        <span style={{ fontSize: '0.85rem' }}>Tente selecionar outra data.</span>
+                    </div>
                 ) : (
                     <div className={styles.historicoGrid}>
-                        {historico.map(h => (
+                        {historico.map(h => ( // <--- Agora o array já vem filtrado do Java!
                             <div key={h.id} className={styles.cardTurno}>
                                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                                     <h4>Turno #{h.id}</h4>
-                                    <span
-                                        className={`${styles.statusBadge} ${h.status === 'ABERTO' ? styles.badgeGreen : styles.badgeRed}`}>
+                                    <span className={`${styles.statusBadge} ${h.status === 'ABERTO' ? styles.badgeGreen : styles.badgeRed}`}>
                                         {h.status}
                                     </span>
                                 </div>
                                 <small style={{color: 'var(--text-2)', marginBottom: '0.5rem', display: 'block'}}>
-                                    Abertura: {formatarData(h.dataAbertura)}<br/>
-                                    Fechamento: {formatarData(h.dataFechamento)}
+                                    Abertura: {formatarData(h.dataAbertura, h.usuarioAbertura)}<br/>
+                                    Fechamento: {formatarData(h.dataFechamento, h.usuarioFechamento)}
                                 </small>
                                 <p style={{margin: '0 0 1rem 0'}}>
                                     Saldo Final: <b>{formatarMoeda(h.saldoDinheiroFechamento)}</b>
@@ -143,28 +214,17 @@ export default function TelaCaixa() {
                 )}
             </section>
 
-            {modal === 'ABRIR' &&
-                <ModalContagem tipo="ABRIR" onClose={() => setModal(null)} onSuccess={carregarDados}/>}
-            {modal === 'FECHAR' &&
-                <ModalContagem
-                    tipo="FECHAR"
-                    onClose={() => setModal(null)}
-                    onSuccess={carregarDados}
-                    saldoEsperado={saldoEsperado}
-                />
-            }
-            {modal === 'SUPRIMENTO' &&
-                <ModalMovimentacao tipo="SUPRIMENTO" onClose={() => setModal(null)} onSuccess={carregarDados}/>}
-            {modal === 'SANGRIA' &&
-                <ModalMovimentacao tipo="SANGRIA" onClose={() => setModal(null)} onSuccess={carregarDados}/>}
-            {modal === 'RELATORIO' && selectedSessaoId &&
-                <ModalRelatorio sessaoId={selectedSessaoId} onClose={() => setModal(null)}/>}
+            {/* Os modais (ModalContagem, ModalMovimentacao, ModalRelatorio) continuam aqui embaixo... */}
+            {modal === 'ABRIR' && <ModalContagem tipo="ABRIR" onClose={() => setModal(null)} onSuccess={carregarDados}/>}
+            {modal === 'FECHAR' && <ModalContagem tipo="FECHAR" onClose={() => setModal(null)} onSuccess={carregarDados} saldoEsperado={saldoEsperado} />}
+            {modal === 'SUPRIMENTO' && <ModalMovimentacao tipo="SUPRIMENTO" onClose={() => setModal(null)} onSuccess={carregarDados}/>}
+            {modal === 'SANGRIA' && <ModalMovimentacao tipo="SANGRIA" onClose={() => setModal(null)} onSuccess={carregarDados}/>}
+            {modal === 'RELATORIO' && selectedSessaoId && <ModalRelatorio sessaoId={selectedSessaoId} onClose={() => setModal(null)}/>}
         </div>
     );
 }
 
-// ✅ SUBSTITUIR pela versão correta:
-function ModalContagem({ tipo, onClose, onSuccess, saldoEsperado = 0 }: {
+function ModalContagem({tipo, onClose, onSuccess, saldoEsperado = 0}: {
     tipo: 'ABRIR' | 'FECHAR',
     onClose: () => void,
     onSuccess: () => void,
@@ -172,7 +232,7 @@ function ModalContagem({ tipo, onClose, onSuccess, saldoEsperado = 0 }: {
 }) {
     const [contagem, setContagem] = useState<Record<string, string>>({});
     const [observacao, setObservacao] = useState('');
-    const [etapa, setEtapa] = useState<'CONTAGEM' | 'JUSTIFICATIVA'>('CONTAGEM'); // ← estava faltando
+    const [etapa, setEtapa] = useState<'CONTAGEM' | 'JUSTIFICATIVA'>('CONTAGEM');
 
     const notas = ['200', '100', '50', '20', '10', '5', '2'];
     const moedas = ['1', '0.50', '0.25', '0.10', '0.05'];
@@ -183,16 +243,16 @@ function ModalContagem({ tipo, onClose, onSuccess, saldoEsperado = 0 }: {
         ).toFixed(2)
     );
 
-    async function enviarFechamento(obs: string = '') { // ← estava faltando
+    async function enviarFechamento(obs: string = '') {
         const payload = {
             qtd200: parseInt(contagem['200']) || 0,
             qtd100: parseInt(contagem['100']) || 0,
-            qtd50:  parseInt(contagem['50'])  || 0,
-            qtd20:  parseInt(contagem['20'])  || 0,
-            qtd10:  parseInt(contagem['10'])  || 0,
-            qtd5:   parseInt(contagem['5'])   || 0,
-            qtd2:   parseInt(contagem['2'])   || 0,
-            qtd1:   parseInt(contagem['1'])   || 0,
+            qtd50: parseInt(contagem['50']) || 0,
+            qtd20: parseInt(contagem['20']) || 0,
+            qtd10: parseInt(contagem['10']) || 0,
+            qtd5: parseInt(contagem['5']) || 0,
+            qtd2: parseInt(contagem['2']) || 0,
+            qtd1: parseInt(contagem['1']) || 0,
             qtd050: parseInt(contagem['0.50']) || 0,
             qtd025: parseInt(contagem['0.25']) || 0,
             qtd010: parseInt(contagem['0.10']) || 0,
@@ -329,15 +389,26 @@ function ModalMovimentacao({tipo, onClose, onSuccess}: {
     onClose: () => void,
     onSuccess: () => void
 }) {
-    const [valor, setValor] = useState('');
+    const [contagem, setContagem] = useState<Record<string, string>>({});
     const [motivo, setMotivo] = useState('');
     const [loading, setLoading] = useState(false);
 
+    const notas = ['200', '100', '50', '20', '10', '5', '2'];
+    const moedas = ['1', '0.50', '0.25', '0.10', '0.05'];
+
+    const total = parseFloat(
+        notas.concat(moedas).reduce((acc, v) =>
+            acc + (parseFloat(v) * (parseInt(contagem[v] || '0'))), 0
+        ).toFixed(2)
+    );
+
     async function handleSalvar(e: React.FormEvent) {
         e.preventDefault();
+        if (total <= 0) return alert("O valor total deve ser maior que zero.");
+
         setLoading(true);
         try {
-            await caixaApi.movimentar(tipo, parseFloat(valor.replace(',', '.')), motivo);
+            await caixaApi.movimentar(tipo, total, motivo);
             onSuccess();
             onClose();
         } catch (error) {
@@ -349,28 +420,78 @@ function ModalMovimentacao({tipo, onClose, onSuccess}: {
 
     return (
         <div className={styles.backdrop}>
-            <form className={styles.modal} onSubmit={handleSalvar}>
+            <form className={styles.modal} onSubmit={handleSalvar} style={{ maxWidth: '650px' }}>
                 <h3 style={{color: tipo === 'SUPRIMENTO' ? 'var(--success)' : 'var(--warning)'}}>
                     {tipo === 'SUPRIMENTO' ? 'Nova Entrada (Suprimento)' : 'Nova Retirada (Sangria)'}
                 </h3>
-                <div className={styles.formGrid}>
+
+                <div className={styles.calculadoraGrid}>
                     <div>
-                        <label>Valor (R$)</label>
-                        <input type="number" step="0.01" min="0.01" required className={styles.input} value={valor}
-                               onChange={e => setValor(e.target.value)} placeholder="0.00"/>
+                        <h4 className={styles.calculadoraTitle}>Cédulas</h4>
+                        <div className={styles.moedasContainer}>
+                            {notas.map(n => (
+                                <div key={n} className={styles.notaRow}>
+                                    <label>R$ {n},00</label>
+                                    <input className={styles.inputNota} type="number" min="0" placeholder="0"
+                                           value={contagem[n] || ''}
+                                           onChange={e => setContagem({...contagem, [n]: e.target.value})}/>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                     <div>
-                        <label>Motivo</label>
-                        <input type="text" required className={styles.input} value={motivo}
-                               onChange={e => setMotivo(e.target.value)} placeholder="Justificativa..."/>
+                        <h4 className={styles.calculadoraTitle}>Moedas</h4>
+                        <div className={styles.moedasContainer}>
+                            {moedas.map(m => (
+                                <div key={m} className={styles.notaRow}>
+                                    <label>R$ {parseFloat(m).toFixed(2).replace('.', ',')}</label>
+                                    <input className={styles.inputNota} type="number" min="0" placeholder="0"
+                                           value={contagem[m] || ''}
+                                           onChange={e => setContagem({...contagem, [m]: e.target.value})}/>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div className={styles.modalActions}>
-                        <button type="button" className={styles.btnGhost} onClick={onClose}>Cancelar</button>
-                        <button type="submit"
-                                className={tipo === 'SUPRIMENTO' ? styles.btnSuprimento : styles.btnSangria}
-                                disabled={loading}>Confirmar
-                        </button>
-                    </div>
+                </div>
+
+                <div style={{ marginTop: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                        Motivo da movimentação
+                        <span style={{ color: 'var(--red)', marginLeft: '4px' }}>*</span>
+                    </label>
+                    <input
+                        type="text"
+                        required
+                        minLength={5}
+                        className={styles.input}
+                        value={motivo}
+                        onChange={e => setMotivo(e.target.value)}
+                        placeholder="Descreva o motivo (obrigatório)..."
+                        style={{
+                            borderColor: motivo.trim().length === 0 ? 'var(--red)' : 'var(--border)'
+                        }}
+                    />
+                    {motivo.trim().length === 0 && (
+                        <small style={{ color: 'var(--red)', fontSize: '0.75rem' }}>
+                            O motivo é obrigatório para esta operação.
+                        </small>
+                    )}
+                </div>
+
+                <div className={styles.totalCalculadoBox} style={{margin: '1rem 0'}}>
+                    <span>Total a {tipo === 'SUPRIMENTO' ? 'adicionar' : 'retirar'}:</span>
+                    <h2>R$ {total.toFixed(2).replace('.', ',')}</h2>
+                </div>
+
+                <div className={styles.modalActions}>
+                    <button type="button" className={styles.btnGhost} onClick={onClose}>Cancelar</button>
+                    <button
+                        type="submit"
+                        className={tipo === 'SUPRIMENTO' ? styles.btnSuprimento : styles.btnSangria}
+                        disabled={loading || motivo.trim().length < 10}
+                    >
+                        Confirmar
+                    </button>
                 </div>
             </form>
         </div>
@@ -380,9 +501,7 @@ function ModalMovimentacao({tipo, onClose, onSuccess}: {
 function ModalRelatorio({
                             sessaoId, onClose
                         }: {
-    sessaoId: number, onClose
-        :
-        () => void
+    sessaoId: number, onClose: () => void
 }) {
     const [relatorio, setRelatorio] = useState<any>(null);
 
@@ -418,9 +537,9 @@ function ModalRelatorio({
                     <div style={{display: 'flex', justifyContent: 'space-between'}}><span>Cartão Crédito:</span>
                         <b>{formatarVal(relatorio.totalCredito)}</b></div>
 
-                    <hr style={{ width: '100%', border: '0.5px solid var(--border)' }} />
+                    <hr style={{width: '100%', border: '0.5px solid var(--border)'}}/>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                    <div style={{display: 'flex', justifyContent: 'space-between', fontWeight: 'bold'}}>
                         <span>Total Geral:</span>
                         <b>
                             {formatarVal(
@@ -432,7 +551,6 @@ function ModalRelatorio({
                         </b>
                     </div>
 
-                    {/* 🐛 CORRIGIDO: Removido o background #f7fafc (branco) e substituido por var(--bg-2) (fundo secundário escuro) */}
                     <div style={{
                         marginTop: '1rem',
                         background: 'var(--bg-2)',
